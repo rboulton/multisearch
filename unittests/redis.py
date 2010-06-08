@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 
 # If there is one, import an "ext" module first, which should set up the path
-# to include the redis-py client.
+# to include the clients.
 try:
     import ext
 except ImportError:
     pass
 
-import redissearch
+import multisearch
 import unittest
 
 class RedisTest(unittest.TestCase):
     def setUp(self):
-        self.s = redissearch.RedisSearch('testdb')
+        self.s = multisearch.RedisSearch('testdb')
         self.s.full_reset() # Try and clean up old test runs.
 
     def tearDown(self):
