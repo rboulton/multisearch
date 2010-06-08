@@ -1,4 +1,4 @@
-RedisSearch
+MultiSearch
 ===========
 
 Warning: very experimental code.  This is currently just a playground.
@@ -8,8 +8,8 @@ An attempt to implement a document search system using redis.
 Example
 -------
 
->>> import redissearch
->>> s = redissearch.RedisSearch('testdb')
+>>> import multisearch
+>>> s = multisearch.RedisSearch('testdb')
 >>> docid = s.add({
 ...                'title': 'My first document',
 ...                'text': "This is a very simple document that we'd like to index",
