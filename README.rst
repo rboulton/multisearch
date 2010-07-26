@@ -1,15 +1,18 @@
 MultiSearch
 ===========
 
-Warning: very experimental code.  This is currently just a playground.
+Warning: experimental code.
 
-An attempt to implement a document search system using redis.
+This is an attempt to build a generic search engine interface in Python, which
+exposes a common subset of features for each engine, but also allows each
+engine to be accessed directly to allow the full range of features for that
+engine to be used.
 
 Example
 -------
 
 >>> import multisearch
->>> s = multisearch.RedisSearch('testdb')
+>>> s = multisearch.XapianSearch('testdb', readonly=False)
 >>> docid = s.add({
 ...                'title': 'My first document',
 ...                'text': "This is a very simple document that we'd like to index",
@@ -39,6 +42,8 @@ Infrastructure for automatically guessing field types, and storing a schema
 
 Todo
 ----
+
+Lots and lots and lots.
 
 Facet calculation (should be quite easy; use SORT with GET to pull in facets
 for each matching document).

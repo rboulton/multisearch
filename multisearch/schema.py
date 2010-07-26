@@ -122,11 +122,11 @@ class Schema(object):
         if type_params is not None:
             return type_params
 
-        type_params = self._guess(fieldname, value)
+        type_params = self.make_guess(fieldname, value)
         self.set(fieldname, *type_params)
         return type_params
 
-    def _guess(self, fieldname, value):
+    def make_guess(self, fieldname, value):
         """Guess the type and parameters for a fieldname, given a sample value.
 
         This may be subclassed to implement a different set of guessing rules.
