@@ -54,6 +54,12 @@ class DbClosedError(SearchClientError):
     """
     pass
 
+class DbReadOnlyError(SearchClientError):
+    """A write operation was attempted on a readonly database.
+
+    """
+    pass
+
 class BackendError(SearchClientError):
     """An error produced by a backend.
 

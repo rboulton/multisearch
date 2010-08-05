@@ -23,10 +23,12 @@ field.
 """
 __docformat__ = "restructuredtext en"
 
+import errors
 try:
     from simplejson import json
 except ImportError:
     import json
+import processors
 import queries
 
 # Schema version that this creates.
@@ -43,6 +45,16 @@ class Schema(object):
 
     alltypes = (TEXT, BLOB, )
 
+    indexers = {
+        TEXT: processors.TextIndexer,
+        BLOB: processors.BlobIndexer,
+    }
+
+    generators = {
+        TEXT: processors.TextQueryGenerator,
+        BLOB: processors.BlobQueryGenerator,
+    }
+
     def __init__(self):
         """Initialise the schema for a given database.
 
@@ -57,25 +69,40 @@ class Schema(object):
         # Callers should set this to False when the schema has been saved.
         self.modified = False
 
+        # Flag to indicate when the schema is modifiable.
+        # Some backends will set this to False.
+        self.modifiable = True
+
         # A cache of indexers for this schema.
         self._indexer_cache = {}
 
         # A cache of query generators for this schema.
         self._generator_cache = {}
 
-    def unserialise(self, value):
-        """Load the schema from json.
-
-        Overrides any existing configuration in the schema.
+    def _check_modifiable(self):
+        """CHeck that a schema is modifable.
 
         """
+        if not self.modifiable:
+            raise errors.DbReadOnlyError("Attempt to modify schema for a "
+                                         "readonly backend")
+
+    @staticmethod
+    def unserialise(value):
+        """Load the schema from json.
+
+        """
+        if value is None or value == '':
+            return Schema()
         schema = json.loads(value)
         if schema['version'] != SCHEMA_VERSION:
             raise RuntimeError("Can't handle this version of the schema (got "
                                "version %s - I understand version %s" %
                                (schema['version'], SCHEMA_VERSION))
-        self.types = dict(schema['fieldtypes'])
-        self.modified = False
+        result = Schema()
+        result.types = dict(schema['fieldtypes'])
+        result.modified = False
+        return result
 
     def serialise(self):
         """Serialise the schema to json.
@@ -101,6 +128,7 @@ class Schema(object):
         The field type cannot be changed once it is set.
 
         """
+        self._check_modifiable()
         assert type in self.alltypes
         params = dict(params)
         if fieldname in self.types:
@@ -144,10 +172,7 @@ class Schema(object):
         indexer = self._indexer_cache.get(fieldname)
         if indexer is None:
             type, params = self.get(fieldname)
-            indexer = {
-                self.TEXT: TextIndexer,
-                self.BLOB: BlobIndexer,
-            }[type](fieldname, params)
+            indexer = self.indexers[type](fieldname, params)
             self._indexer_cache[fieldname] = indexer
         return indexer
 
@@ -160,59 +185,6 @@ class Schema(object):
         generator = self._generator_cache.get(fieldname)
         if generator is None:
             type, params = self.get(fieldname)
-            generator = {
-                self.TEXT: TextQueryGenerator,
-                self.BLOB: BlobQueryGenerator,
-            }[type](fieldname, params)
+            generator = generators[type](fieldname, params)
             self._generator_cache[fieldname] = generator
         return generator
-
-class BaseIndexer(object):
-    """Base class of indexers.
-    
-    Subclasses should implement the __call__ method, taking a one parameter of
-    a value in the field being indexed, and returning or yielding a sequence of
-    terms to be indexed.
-
-    """
-    def __init__(self, fieldname, params):
-        """Default initialiser - just stores the fieldname and parameters.
-
-        """
-        self.fieldname = fieldname
-        self.params = params
-
-class BaseQueryGenerator(object):
-    """Base class of query generators.
-
-    Subclasses should implement the __call__ method, taking one parameter of
-    a value to search for in the field being indexed, and returning a Query
-    subclass.
-
-    """
-    def __init__(self, fieldname, params):
-        self.fieldname = fieldname
-        self.params = params
-
-class TextIndexer(BaseIndexer):
-    def __call__(self, value):
-        for term in value.split():
-            yield self.fieldname + ':' + term
-
-class TextQueryGenerator(BaseQueryGenerator):
-    def __call__(self, value, default_op=None):
-        terms = []
-        for term in value.split():
-            terms.append(self.fieldname + ':' + term)
-        return queries.QueryTerms(terms, default_op=default_op)
-
-class BlobIndexer(BaseIndexer):
-    def __call__(self, value):
-        yield self.fieldname + ':' + value
-
-class BlobQueryGenerator(BaseQueryGenerator):
-    def __call__(self, value):
-        yield self.fieldname + ':' + value
-    def __call__(self, value, *args, **kwargs):
-        return queries.QueryTerms([self.fieldname + ':' + value],
-                                  default_op=default_op)

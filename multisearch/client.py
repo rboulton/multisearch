@@ -22,42 +22,44 @@ r"""Base class and factory for clients.
 """
 __docformat__ = "restructuredtext en"
 
+from backends.closed_backend import ClosedBackend
+import errors
 import queries
-import schema
 
 _factories = {}
+class SearchClient(object):
+    def __init__(self, type=None, *args, **kwargs):
+        """Initialise a search client of a given type.
 
-def SearchClient(type=None, *args, **kwargs):
-    """Create a client of a given type.
-
-    If the type of client requested is not available, raises KeyError.
-
-    """
-    factory = _factories.get(type, None)
-    if factory is None:
-        if type == 'redis':
-            from backends.redis import RedisSearchClient
-            factory = RedisSearchClient
-        elif type == 'xapian':
-            from backends.xapian import XapianSearchClientFactory
-            factory = XapianSearchClientFactory
-        else:
-            raise KeyError("SearchClient type %r not known" % type)
-        _factories[type] = factory
-    return factory(*args, **kwargs)
-
-class BaseSearchClient(object):
-    def __init__(self):
-        """Initialise a search client.
+        If the type of client requested is not available, raises KeyError.
 
         """
-        self.schema = schema.Schema()
+        factory = _factories.get(type, None)
+        if factory is None:
+            if type == 'redis':
+                from backends.redis_backend import RedisBackend
+                factory = RedisBackend
+            elif type == 'xapian':
+                from backends.xapian_backend import XapianBackendFactory
+                factory = XapianBackendFactory
+            else:
+                raise KeyError("Backend type %r not known" % type)
+            _factories[type] = factory
+        self.backend = factory(*args, **kwargs)
+
+    @property
+    def schema(self):
+        """Get the schema in use by this client.
+
+        """
+        return self.backend.schema
 
     def close(self):
         """Close any open resources.
 
         """
-        raise NotImplementedError
+        self.backend.close()
+        self.backend = ClosedBackend()
 
     def commit(self):
         """Perform any buffered changes.
@@ -66,7 +68,7 @@ class BaseSearchClient(object):
         should generally call this after a batch of operations, to ensure that 
 
         """
-        raise NotImplementedError
+        self.backend.close()
 
     def update(self, doc, docid=None, fail_if_exists=False):
         """Add or update a document.
@@ -96,9 +98,19 @@ class BaseSearchClient(object):
         same document ID will be replaced by this call.
 
         Returns the unique identifier used for the document.
+        FIXME - should it always, or should this be backend dependent?  Or
+        should there be an "allow no id" option.
 
         """
-        raise NotImplementedError
+        if isinstance(doc, dict):
+            flatdoc = []
+            for fieldname, values in doc.iteritems():
+                if isinstance(values, basestring):
+                    flatdoc.append((fieldname, values))
+                else:
+                    flatdoc.extend(((fieldname, value) for value in values))
+            doc = flatdoc
+        self.backend.update(doc, docid, fail_if_exists)
 
     def delete(self, docid, fail_if_missing=False):
         """Delete a document, given its docid.
@@ -108,25 +120,43 @@ class BaseSearchClient(object):
         document isn't found.
 
         """
-        raise NotImplementedError
+        self.backend.delete(docid, fail_if_missing)
 
-    def full_reset(self):
+    # dele
+
+    def destroy_database(self):
         """Delete all documents, clear the schema, and reset all state.
 
-        """
-        raise NotImplementedError
+        For disk-based backends, this should delete the database entirely from
+        the filesystem.
 
+        """
+        self.backend.destroy_database()
+
+    @property
     def document_count(self):
         """Return the number of documents.
 
         """
-        raise NotImplementedError
+        return self.backend.get_document_count()
 
-    def iter_documents(self):
-        """Iterate through all the document IDs.
+    def __len__(self):
+        """Return the number of documents.
 
         """
-        raise NotImplementedError
+        return self.backend.get_document_count()
+
+    def iter_documents(self):
+        """Iterate through all the documents.
+
+        """
+        raise self.backend.iter_documents()
+
+    def __iter__(self):
+        """Iterate through all the documents.
+
+        """
+        raise self.backend.iter_documents()
 
     def query(self, fieldname, value, *args, **kwargs):
         """Build a basic query for the contents of a named field.
@@ -142,4 +172,4 @@ class BaseSearchClient(object):
         method is usually called by the __call__ method of such an instance.
 
         """
-        raise NotImplementedError
+        return self.backend.search(search)

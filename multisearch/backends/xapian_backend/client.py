@@ -22,14 +22,18 @@ r"""Xapian backend.
 """
 __docformat__ = "restructuredtext en"
 
-from multisearch.client import BaseSearchClient
+import multisearch.backends.xapian_backend.errors
+from multisearch.schema import Schema
 import xapian
 
-def XapianSearchClientFactory(path, readonly):
+def XapianBackendFactory(path, readonly=False, *args, **kwargs):
+    """Factory for XapianBackends.
+
+    """
     if readonly:
-        return ReadonlySearchClient(path)
+        return ReadonlyBackend(path, *args, **kwargs)
     else:
-        return WritableSearchClient(path)
+        return WritableBackend(path, *args, **kwargs)
 
 class DocumentIter(object):
     """Iterate through a set of documents.
@@ -55,40 +59,63 @@ class DocumentIter(object):
         posting = self.iter.next()
         return XapianDocument(self.db.get_document(posting.docid))
 
-class SearchClient(BaseSearchClient):
+class Backend(object):
+    """Base class for Xapian Backends.
+
+    """
+    def __init__(self):
+        serialised_schema = self.db.get_metadata("__ms:schema")
+        self.schema = Schema.unserialise(serialised_schema)
+
     def close(self):
         self.db.close()
 
-    def document_count(self):
+    def get_document_count(self):
         return self.db.get_doccount()
 
-    def all(self):
+    def document_iter(self):
         FIXME # return a lazily evaluated object which behaves like a sequence and returns documents
 
     def query(self, fieldname, value, *args, **kwargs):
-        pass
+        FIXME
 
     def search(self, search):
-        pass
+        FIXME
 
-class ReadonlySearchClient(SearchClient):
-    def __init__(self, path):
-        SearchClient.__init__(self)
+class ReadonlyBackend(Backend):
+    """A readonly Xapian Backend.
+
+    """
+    def __init__(self, path, *args, **kwargs):
         self.db = xapian.Database(path)
+        Backend.__init__(self)
+        self.schema.modifiable = False
 
-class WritableSearchClient(SearchClient):
-    def __init__(self, path):
-        SearchClient.__init__(self)
+class WritableBackend(Backend):
+    """A readonly Xapian Backend.
+
+    """
+    def __init__(self, path, *args, **kwargs):
         self.db = xapian.WritableDatabase(path, xapian.DB_CREATE_OR_OPEN)
+        Backend.__init__(self)
 
     def commit(self):
         self.db.commit()
 
     def update(self, doc, docid=None, fail_if_exists=False):
-        pass
+        result = xapian.Document()
+        for fieldname, value in doc:
+            self.schema.guess(fieldname, value)
+            idx = self.schema.indexer(fieldname)
+            for term in idx(value):
+                doc.add_term(term)
+        if docid is not None:
+            doc.add_term("I" + docid) # FIXME - ensure that a ":" in the docid
+            # doesn't risk producing a valid prefix. How?  Escape them?
+        print [item for item in result.termlist()]
 
     def delete(self, docid, fail_if_missing=False):
-        pass
+        FIXME
 
-    def full_reset(self):
-        pass
+    def destroy_database(self):
+        self.db.close()

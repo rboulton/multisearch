@@ -12,11 +12,11 @@ Example
 -------
 
 >>> import multisearch
->>> s = multisearch.XapianSearch('testdb', readonly=False)
->>> docid = s.add({
+>>> s = multisearch.SearchClient('xapian', 'testdb', readonly=False)
+>>> docid = s.update({
 ...                'title': 'My first document',
 ...                'text': "This is a very simple document that we'd like to index",
-...                }))
+...                })
 >>> print repr(docid)
 '1'
 >>> r = s.query(u'title', u'first').search(0, 10)
