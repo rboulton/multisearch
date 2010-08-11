@@ -69,6 +69,10 @@ class Schema(object):
         # Callers should set this to False when the schema has been saved.
         self.modified = False
 
+        # Callback, called when the schema is modified, and passed the schema.
+        def dummy_cb(): pass
+        self.on_modified = dummy_cb
+
         # Flag to indicate when the schema is modifiable.
         # Some backends will set this to False.
         self.modifiable = True
@@ -139,6 +143,7 @@ class Schema(object):
             return
         self.types[fieldname] = (type, params)
         self.modified = True
+        self.on_modified()
 
     def guess(self, fieldname, value):
         """Guess the type and parameters for a field, given its value.
@@ -185,6 +190,6 @@ class Schema(object):
         generator = self._generator_cache.get(fieldname)
         if generator is None:
             type, params = self.get(fieldname)
-            generator = generators[type](fieldname, params)
+            generator = self.generators[type](fieldname, params)
             self._generator_cache[fieldname] = generator
         return generator

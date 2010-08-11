@@ -60,6 +60,12 @@ class DbReadOnlyError(SearchClientError):
     """
     pass
 
+class UnknownQueryTypeError(SearchClientError):
+    """An unknown query type was passed to a backend.
+
+    """
+    pass
+
 class BackendError(SearchClientError):
     """An error produced by a backend.
 

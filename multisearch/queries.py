@@ -214,6 +214,7 @@ class QueryCombination(Query):
 
     """
     def __init__(self, subqs):
+        super(QueryCombination, self).__init__()
         self.subqs = list(subqs)
         for query in self.subqs:
             if not isinstance(query, Query):
@@ -269,7 +270,7 @@ class QueryNot(QueryCombination):
     def __init__(self, subqs):
         if len(subqs) > 2:
             subqs = (subqs[0], QueryOr(subqs[1:]))
-        QueryCombination.__init__(self, subqs)
+        super(QueryNot, self).__init__(subqs)
 
 class QueryMultWeight(Query):
     """A query which returns the same documents as a sub-query, but with the
@@ -280,6 +281,7 @@ class QueryMultWeight(Query):
     def __init__(self, subq, mult):
         self.subq = subq
         self.mult = float(mult)
+        super(QueryMultWeight, self).__init__()
     def __unicode__(self):
         return u"(%s * %.4g)" % (unicode(self.subq), self.mult)
     def __repr__(self):

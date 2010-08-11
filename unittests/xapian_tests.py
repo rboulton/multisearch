@@ -28,23 +28,25 @@ class XapianTest(unittest.TestCase):
             'title': 'My first document',
             'text': "This is a very simple document that we'd like to index",
         }
-        id1 = client.update(doc)
+        id1 = client.update(doc, docid=1)
         self.assertEqual(client.document_count, 1)
-        self.assertEqual(list(sorted(client.iter_docids())), ['1'])
+        self.assertEqual(list(sorted(doc.docid for doc in client.iter_documents())), ['1'])
         r = client.query(u'title', u'first').search(0, 10)
         self.assertEqual(len(r), 1)
-        self.assertEqual(list(r), ['1'])
+        self.assertEqual(list(doc.docid for doc in r), ['1'])
         r = (client.query(u'title', u'first') | client.query(u'text', u'very simple')).search(0, 10)
         self.assertEqual(len(r), 1)
-        self.assertEqual(list(r), ['1'])
+        self.assertEqual(list(doc.docid for doc in r), ['1'])
 
         client.delete(id1)
-        self.assertEqual(client.document_count(), 0)
-        self.assertEqual(list(sorted(client.iter_docids())), [])
+        self.assertEqual(client.document_count, 0)
+        self.assertEqual(list(sorted(client.iter_documents())), [])
         r = client.query(u'title', u'first').search(0, 10)
         self.assertEqual(len(r), 0)
+        self.assertEqual(list(r), [])
         r = (client.query(u'title', u'first') | client.query(u'text', u'very simple')).search(0, 10)
         self.assertEqual(len(r), 0)
+        self.assertEqual(list(r), [])
 
 if __name__ == '__main__':
     unittest.main()

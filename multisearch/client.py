@@ -26,14 +26,90 @@ from backends.closed_backend import ClosedBackend
 import errors
 import queries
 
+class Term(object):
+    """A term returned from a list of terms.
+
+    This object can have various properties, although the exact set available
+    will depend on the backend, and on the list of term which the object came
+    from.  The `raw` property is the only property which must always be
+    present.
+
+     - `raw`: The raw value of the term (for most backends, this will be a
+       string).  The raw value should suffice to identify a term in the
+       database.
+     - `value`: The value of the term.
+     - `field`: The field that the term is associated with (this may not always
+       be present - and, indeed, may not always be meaningful, since a term may
+       be a composite piece of information from several fields).
+     - `wdf`: The "within document frequency" of the term.  This is the
+       number of times that the term occurred in the document.
+     - `docfreq`: The "document frequency" of the term.  This is the total
+       number of documents that the term occurred in across all the documents
+       in the collection.
+     - `collfreq`: The "collection frequency" of the term.  This is the total
+       number of times that the term occurred across all the documents in the
+       collection.
+
+    """
+    pass
+
+class Document(object):
+    """A document returned from the search engine.
+
+    """
+    @property
+    def docid(self):
+        """The document ID for the document.
+
+        """
+        return self.get_docid()
+
+    @property
+    def data(self):
+        """The data stored in the document.
+        
+        This consists of all field values which were passed in which the schema
+        caused to be stored.  The values are returned as a sequence of
+        (fieldname, value) pairs, in the same order as indexed.
+
+        """
+        return self.get_data()
+
+    @property
+    def terms(self):
+        """The terms stored in the document.
+
+        This consists of an iterator over, or sequence of, term objects generated from
+        field values by the actions in the schema.  items in the
+
+        """
+        return self.get_terms()
+
+    def __str__(self):
+        return "Document(docid=%r)" % self.docid
+
+    def __repr__(self):
+        return "<multisearch.Document(docid=%r)>" % self.docid
+
 _factories = {}
 class SearchClient(object):
+    """A client for a search engine.
+
+    """
+
     def __init__(self, type=None, *args, **kwargs):
         """Initialise a search client of a given type.
 
         If the type of client requested is not available, raises KeyError.
 
         """
+        # type can be None to allow external code to create a search client
+        # with a custom backend.
+        if type is not None:
+            self.backend = self._get_factory(type)(*args, **kwargs)
+
+    @staticmethod
+    def _get_factory(type):
         factory = _factories.get(type, None)
         if factory is None:
             if type == 'redis':
@@ -45,7 +121,7 @@ class SearchClient(object):
             else:
                 raise KeyError("Backend type %r not known" % type)
             _factories[type] = factory
-        self.backend = factory(*args, **kwargs)
+        return factory
 
     @property
     def schema(self):
@@ -65,17 +141,18 @@ class SearchClient(object):
         """Perform any buffered changes.
 
         The exact semantics of this will vary between backends, but users
-        should generally call this after a batch of operations, to ensure that 
+        should generally call this after a batch of operations, to ensure that
+        changes have been applied such that the modified items can be searched.
 
         """
-        self.backend.close()
+        return self.backend.commit()
 
     def update(self, doc, docid=None, fail_if_exists=False):
         """Add or update a document.
 
         `doc` is either:
          - a dictionary, keyed by field name.  The values are lists of field
-           values.
+           values, or single values.
          - or, a sequence of (field name, field value) pairs.
 
         Field values may be any type, depending on the schema and backend, but
@@ -94,12 +171,13 @@ class SearchClient(object):
         The identifier will be a byte string.
 
         If `fail_if_exists` is set to True, a DocExistsError will be raised if
-        the document already exists.  Otherwise, any existing document with the
-        same document ID will be replaced by this call.
+        a document with the same ID already exists.  Otherwise, any existing
+        document with the same document ID will be replaced by this call.
 
-        Returns the unique identifier used for the document.
-        FIXME - should it always, or should this be backend dependent?  Or
-        should there be an "allow no id" option.
+        This usually returns the unique identifier used for the document.  With
+        some backends, it may also return None if no identifier was supplied
+        and an identifier has not yet been allocated at the time this method
+        returns.
 
         """
         if isinstance(doc, dict):
@@ -107,10 +185,12 @@ class SearchClient(object):
             for fieldname, values in doc.iteritems():
                 if isinstance(values, basestring):
                     flatdoc.append((fieldname, values))
-                else:
+                elif hasattr(values, '__iter__'):
                     flatdoc.extend(((fieldname, value) for value in values))
+                else:
+                    flatdoc.append((fieldname, values))
             doc = flatdoc
-        self.backend.update(doc, docid, fail_if_exists)
+        return self.backend.update(doc, docid, fail_if_exists)
 
     def delete(self, docid, fail_if_missing=False):
         """Delete a document, given its docid.
@@ -122,8 +202,6 @@ class SearchClient(object):
         """
         self.backend.delete(docid, fail_if_missing)
 
-    # dele
-
     def destroy_database(self):
         """Delete all documents, clear the schema, and reset all state.
 
@@ -132,6 +210,7 @@ class SearchClient(object):
 
         """
         self.backend.destroy_database()
+        self.backend = ClosedBackend()
 
     @property
     def document_count(self):
@@ -150,13 +229,13 @@ class SearchClient(object):
         """Iterate through all the documents.
 
         """
-        raise self.backend.iter_documents()
+        return self.backend.get_document_iter()
 
     def __iter__(self):
         """Iterate through all the documents.
 
         """
-        raise self.backend.iter_documents()
+        return self.backend.get_document_iter()
 
     def query(self, fieldname, value, *args, **kwargs):
         """Build a basic query for the contents of a named field.

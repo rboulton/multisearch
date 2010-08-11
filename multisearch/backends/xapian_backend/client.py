@@ -23,7 +23,11 @@ r"""Xapian backend.
 __docformat__ = "restructuredtext en"
 
 import multisearch.backends.xapian_backend.errors
+import multisearch.client
+import multisearch.errors
+import multisearch.queries
 from multisearch.schema import Schema
+import uuid
 import xapian
 
 def XapianBackendFactory(path, readonly=False, *args, **kwargs):
@@ -34,6 +38,25 @@ def XapianBackendFactory(path, readonly=False, *args, **kwargs):
         return ReadonlyBackend(path, *args, **kwargs)
     else:
         return WritableBackend(path, *args, **kwargs)
+
+class XapianDocument(multisearch.client.Document):
+    def __init__(self, doc):
+        """Create a XapianDocument.
+
+        `doc` is the xapian document that the 
+
+        """
+        self.doc = doc
+
+    def get_docid(self):
+        tl = self.doc.termlist()
+        try:
+            term = tl.skip_to("!").term
+            if len(term) == 0 or term[0] != '!':
+                return None
+        except StopIteration:
+            return None
+        return term[1:]
 
 class DocumentIter(object):
     """Iterate through a set of documents.
@@ -59,6 +82,17 @@ class DocumentIter(object):
         posting = self.iter.next()
         return XapianDocument(self.db.get_document(posting.docid))
 
+class Results(object):
+    def __init__(self, backend, mset):
+        self.backend = backend
+        self.mset = mset
+
+    def __iter__(self):
+        return DocumentIter(self.backend.db, iter(self.mset))
+
+    def __len__(self):
+        return len(self.mset)
+
 class Backend(object):
     """Base class for Xapian Backends.
 
@@ -73,14 +107,49 @@ class Backend(object):
     def get_document_count(self):
         return self.db.get_doccount()
 
-    def document_iter(self):
-        FIXME # return a lazily evaluated object which behaves like a sequence and returns documents
+    def get_document_iter(self):
+        return DocumentIter(self.db, self.db.postlist(''))
 
-    def query(self, fieldname, value, *args, **kwargs):
-        FIXME
+    def compile(self, query):
+        """Make a xapian Query from a query tree.
+
+        """
+        if isinstance(query, multisearch.queries.QueryCombination):
+            subqs = [self.compile(subq) for subq in query.subqs]
+            try:
+                op = {
+                    multisearch.queries.Query.OR: xapian.Query.OP_OR,
+                    multisearch.queries.Query.AND: xapian.Query.OP_AND,
+                    multisearch.queries.Query.XOR: xapian.Query.OP_XOR,
+                    multisearch.queries.Query.NOT: xapian.Query.OP_AND_NOT,
+                }[query.op]
+            except KeyError:
+                raise multisearch.errors.UnknownQueryTypeError(
+                    "Query operator unknown (%s)" % query.op)
+            return xapian.Query(op, subqs)
+        elif isinstance(query, multisearch.queries.QueryMultWeight):
+            return xapian.Query(xapian.Query.OP_MULT_WEIGHT,
+                                self.compile(query.subq))
+        elif isinstance(query, multisearch.queries.QueryAll):
+            return xapian.Query("")
+        elif isinstance(query, multisearch.queries.QueryNone):
+            return xapian.Query()
+        elif isinstance(query, multisearch.queries.QueryTerms):
+            return xapian.Query(query.default_op,
+                                [xapian.Query(term) for term in query.terms])
+        elif isinstance(query, multisearch.queries.QuerySimilar):
+            return xapian
+        else:
+            raise multisearch.errors.UnknownQueryTypeError(
+                "Query %s of unknown type" % query)
 
     def search(self, search):
-        FIXME
+        xq = self.compile(search.query)
+        enq = xapian.Enquire(self.db)
+        enq.set_query(xq)
+        mset = enq.get_mset(search.start_rank,
+                            search.end_rank - search.start_rank)
+        return Results(self, mset)
 
 class ReadonlyBackend(Backend):
     """A readonly Xapian Backend.
@@ -88,6 +157,7 @@ class ReadonlyBackend(Backend):
     """
     def __init__(self, path, *args, **kwargs):
         self.db = xapian.Database(path)
+        self.path = path
         Backend.__init__(self)
         self.schema.modifiable = False
 
@@ -97,25 +167,48 @@ class WritableBackend(Backend):
     """
     def __init__(self, path, *args, **kwargs):
         self.db = xapian.WritableDatabase(path, xapian.DB_CREATE_OR_OPEN)
+        self.path = path
         Backend.__init__(self)
 
     def commit(self):
+        if self.schema.modified:
+            self.db.set_metadata("__ms:schema", self.schema.serialise())
+            self.schema.modified = False
         self.db.commit()
 
     def update(self, doc, docid=None, fail_if_exists=False):
-        result = xapian.Document()
+        if docid is None:
+            while True:
+                # random uuid
+                docid = str(uuid.uuid4())
+                docidterm = "!%s" % docid
+                if not self.db.term_exists(docidterm):
+                    break
+        else:
+            docidterm = "!%s" % docid
+            if fail_if_exists and not self.db.term_exists(docidterm):
+                raise multisearch.errors.DocExistsError(
+                    "Document with ID %r already exists" % docid)
+
+        xdoc = xapian.Document()
+        xdoc.add_term(docidterm)
+
         for fieldname, value in doc:
             self.schema.guess(fieldname, value)
             idx = self.schema.indexer(fieldname)
             for term in idx(value):
-                doc.add_term(term)
-        if docid is not None:
-            doc.add_term("I" + docid) # FIXME - ensure that a ":" in the docid
-            # doesn't risk producing a valid prefix. How?  Escape them?
-        print [item for item in result.termlist()]
+                xdoc.add_term(term)
+
+        self.db.replace_document(docidterm, xdoc)
+        return docid
 
     def delete(self, docid, fail_if_missing=False):
-        FIXME
+        docidterm = "!%s" % docid
+        if fail_if_missing and not self.db.term_exists(docidterm):
+            raise multisearch.errors.DocNotFoundError(
+                "No document with ID %r found when deleting" % docid)
+        self.db.delete_document(docidterm)
 
     def destroy_database(self):
         self.db.close()
+        shutil.rmtree(self.path)
