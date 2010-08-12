@@ -1,0 +1,14 @@
+The following backends are planned for the initial release:
+
+ - Xapian (because the author knows it extremely well)
+ - Whoosh (because it is convenient to have a pure-python backend, and this will also test out support for backends for which the schema cannot be changed dynamically)
+ - ElasticSearch (because it's very easy to talk to, and rather cool)
+
+High priority backends for subsequent releases are:
+
+ - Solr
+ - Sphinx
+
+Other backend plans:
+
+ - Redis (ie, a search engine implemented in python, using Redis for storage, and using Redis set intersection and related operations for performing searches)
