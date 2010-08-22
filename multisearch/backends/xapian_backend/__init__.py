@@ -1,1 +1,1 @@
-from client import XapianBackendFactory
+from client import BackendFactory

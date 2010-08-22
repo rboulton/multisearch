@@ -22,74 +22,10 @@ r"""Base class and factory for clients.
 """
 __docformat__ = "restructuredtext en"
 
-from backends.closed_backend import ClosedBackend
+from backends.closed import ClosedBackend
 import errors
 import queries
-
-class Term(object):
-    """A term returned from a list of terms.
-
-    This object can have various properties, although the exact set available
-    will depend on the backend, and on the list of term which the object came
-    from.  The `raw` property is the only property which must always be
-    present.
-
-     - `raw`: The raw value of the term (for most backends, this will be a
-       string).  The raw value should suffice to identify a term in the
-       database.
-     - `value`: The value of the term.
-     - `field`: The field that the term is associated with (this may not always
-       be present - and, indeed, may not always be meaningful, since a term may
-       be a composite piece of information from several fields).
-     - `wdf`: The "within document frequency" of the term.  This is the
-       number of times that the term occurred in the document.
-     - `docfreq`: The "document frequency" of the term.  This is the total
-       number of documents that the term occurred in across all the documents
-       in the collection.
-     - `collfreq`: The "collection frequency" of the term.  This is the total
-       number of times that the term occurred across all the documents in the
-       collection.
-
-    """
-    pass
-
-class Document(object):
-    """A document returned from the search engine.
-
-    """
-    @property
-    def docid(self):
-        """The document ID for the document.
-
-        """
-        return self.get_docid()
-
-    @property
-    def data(self):
-        """The data stored in the document.
-        
-        This consists of all field values which were passed in which the schema
-        caused to be stored.  The values are returned as a sequence of
-        (fieldname, value) pairs, in the same order as indexed.
-
-        """
-        return self.get_data()
-
-    @property
-    def terms(self):
-        """The terms stored in the document.
-
-        This consists of an iterator over, or sequence of, term objects generated from
-        field values by the actions in the schema.  items in the
-
-        """
-        return self.get_terms()
-
-    def __str__(self):
-        return "Document(docid=%r)" % self.docid
-
-    def __repr__(self):
-        return "<multisearch.Document(docid=%r)>" % self.docid
+import utils
 
 _factories = {}
 class SearchClient(object):
@@ -97,7 +33,7 @@ class SearchClient(object):
 
     """
 
-    def __init__(self, type=None, *args, **kwargs):
+    def __init__(self, type=None, **kwargs):
         """Initialise a search client of a given type.
 
         If the type of client requested is not available, raises KeyError.
@@ -106,20 +42,20 @@ class SearchClient(object):
         # type can be None to allow external code to create a search client
         # with a custom backend.
         if type is not None:
-            self.backend = self._get_factory(type)(*args, **kwargs)
+            self.backend = self.get_factory(type)(**kwargs)
 
     @staticmethod
-    def _get_factory(type):
+    def get_factory(type):
+        if not utils.is_safe_backend_name(type):
+            raise KeyError("Backend type %r not known" % type)
         factory = _factories.get(type, None)
         if factory is None:
-            if type == 'redis':
-                from backends.redis_backend import RedisBackend
-                factory = RedisBackend
-            elif type == 'xapian':
-                from backends.xapian_backend import XapianBackendFactory
-                factory = XapianBackendFactory
-            else:
-                raise KeyError("Backend type %r not known" % type)
+            try:
+                m = __import__("multisearch.backends.%s_backend" % type,
+                                fromlist=['BackendFactory'], level=0)
+                factory = m.BackendFactory
+            except ImportError, e:
+                raise KeyError("Backend type %r not known, or missing dependencies: %s" % (type, e))
             _factories[type] = factory
         return factory
 
@@ -136,6 +72,27 @@ class SearchClient(object):
         """
         self.backend.close()
         self.backend = ClosedBackend()
+
+    def destroy_database(self):
+        """Delete all documents, clear the schema, and reset all state.
+
+        For disk-based backends, this should delete the database entirely from
+        the filesystem.
+
+        """
+        self.backend.destroy_database()
+        self.backend = ClosedBackend()
+
+    def cancel(self):
+        """Cancel buffered but unapplied changes.
+
+	The exact semantics of this will vary between backends, and it may not
+        be supported at all on some backends, but it should cause document
+        updates which have been made, but not yet committed to the index, to be
+        discarded.
+
+        """
+        return self.backend.cancel()
 
     def commit(self):
         """Perform any buffered changes.
@@ -202,16 +159,6 @@ class SearchClient(object):
         """
         self.backend.delete(docid, fail_if_missing)
 
-    def destroy_database(self):
-        """Delete all documents, clear the schema, and reset all state.
-
-        For disk-based backends, this should delete the database entirely from
-        the filesystem.
-
-        """
-        self.backend.destroy_database()
-        self.backend = ClosedBackend()
-
     @property
     def document_count(self):
         """Return the number of documents.
@@ -236,6 +183,20 @@ class SearchClient(object):
 
         """
         return self.backend.get_document_iter()
+
+    def get_document(self, docid):
+        """Get a document, given a document ID.
+
+        Raise KeyError if the document does not exist.
+
+        """
+        return self.backend.get_document(docid)
+
+    def document_exists(self, docid):
+        """Return True if a document exists, otherwise return False.
+
+        """
+        return self.backend.document_exists(docid)
 
     def query(self, fieldname, value, *args, **kwargs):
         """Build a basic query for the contents of a named field.

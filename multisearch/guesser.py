@@ -17,19 +17,35 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-r"""Utility routines for multisearch.
+r"""Field type guessing.
 
 """
 __docformat__ = "restructuredtext en"
 
-try:
-    import simplejson as json
-except ImportError:
-    import json
+from schema import Schema
 
-import re
+class Guesser(object):
+    """Base class of field type guessers.
 
-safe_backend_name_re = re.compile(r'^[a-z][a-z_]*$')
+    """
+    def guess(self, fieldname, value):
+        """Guess the field type and parameters for a field of a given name,
+        and a sample value.
 
-def is_safe_backend_name(val):
-    return safe_backend_name_re.match(val) is not None
+        Guessers should return one of:
+
+         - A Schema
+
+        """
+        raise NotImplementedError
+
+class TextGuesser(Guesser):
+    """A guesser for a field type, which always guesses TEXT.
+
+    """
+    def guess(self, type, value):
+        return (Schema.TEXT, {})
+
+class ExtensionGuesser(object):
+    """
+    """

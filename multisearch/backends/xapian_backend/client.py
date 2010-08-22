@@ -27,29 +27,32 @@ import multisearch.client
 import multisearch.errors
 import multisearch.queries
 from multisearch.schema import Schema
+from multisearch import utils
 import uuid
 import xapian
 
-def XapianBackendFactory(path, readonly=False, *args, **kwargs):
+def BackendFactory(path=None, readonly=False, **kwargs):
     """Factory for XapianBackends.
 
     """
+    if path is None:
+        raise multisearch.errors.BackendError("Missing path argument")
     if readonly:
-        return ReadonlyBackend(path, *args, **kwargs)
+        return ReadonlyBackend(path)
     else:
-        return WritableBackend(path, *args, **kwargs)
+        return WritableBackend(path)
 
-class XapianDocument(multisearch.client.Document):
-    def __init__(self, doc):
+class XapianDocument(multisearch.Document):
+    def __init__(self, raw):
         """Create a XapianDocument.
 
-        `doc` is the xapian document that the 
+        `raw` is the Xapian Document object wrapped by this.
 
         """
-        self.doc = doc
+        self.raw = raw
 
     def get_docid(self):
-        tl = self.doc.termlist()
+        tl = self.raw.termlist()
         try:
             term = tl.skip_to("!").term
             if len(term) == 0 or term[0] != '!':
@@ -57,6 +60,15 @@ class XapianDocument(multisearch.client.Document):
         except StopIteration:
             return None
         return term[1:]
+
+    def get_data(self):
+        data = self.raw.get_data()
+        if len(data) == 0:
+            return {}
+        return utils.json.loads(data)
+
+    def get_terms(self):
+        FIXME
 
 class DocumentIter(object):
     """Iterate through a set of documents.
@@ -110,6 +122,28 @@ class Backend(object):
     def get_document_iter(self):
         return DocumentIter(self.db, self.db.postlist(''))
 
+    @staticmethod
+    def get_docid_term(docid):
+        """Get the term used to reference a given document ID.
+        """
+        return "!%s" % docid
+
+    def get_document(self, docid):
+        docidterm = self.get_docid_term(docid)
+        while True:
+            try:
+                postlist = self.db.postlist(docidterm)
+                try:
+                    plitem = postlist.next()
+                except StopIteration:
+                    raise KeyError("Unique ID %r not found" % docid)
+                return XapianDocument(self.db.get_document(plitem.docid))
+            except xapian.DatabaseModifiedError, e:
+                self.db.reopen()
+
+    def document_exists(self, docid):
+        return self.db.term_exists(self.get_docid_term(docid))
+
     def compile(self, query):
         """Make a xapian Query from a query tree.
 
@@ -155,7 +189,7 @@ class ReadonlyBackend(Backend):
     """A readonly Xapian Backend.
 
     """
-    def __init__(self, path, *args, **kwargs):
+    def __init__(self, path):
         self.db = xapian.Database(path)
         self.path = path
         Backend.__init__(self)
@@ -165,7 +199,7 @@ class WritableBackend(Backend):
     """A readonly Xapian Backend.
 
     """
-    def __init__(self, path, *args, **kwargs):
+    def __init__(self, path):
         self.db = xapian.WritableDatabase(path, xapian.DB_CREATE_OR_OPEN)
         self.path = path
         Backend.__init__(self)
@@ -176,22 +210,14 @@ class WritableBackend(Backend):
             self.schema.modified = False
         self.db.commit()
 
-    def update(self, doc, docid=None, fail_if_exists=False):
-        if docid is None:
-            while True:
-                # random uuid
-                docid = str(uuid.uuid4())
-                docidterm = "!%s" % docid
-                if not self.db.term_exists(docidterm):
-                    break
-        else:
-            docidterm = "!%s" % docid
-            if fail_if_exists and not self.db.term_exists(docidterm):
-                raise multisearch.errors.DocExistsError(
-                    "Document with ID %r already exists" % docid)
+    def process(self, doc):
+        """Process an incoming document into a Xapian document.
 
+        """
         xdoc = xapian.Document()
-        xdoc.add_term(docidterm)
+
+        stored = {}
+        #FIXME - should be a standard way for indexers to add to the document
 
         for fieldname, value in doc:
             self.schema.guess(fieldname, value)
@@ -199,11 +225,35 @@ class WritableBackend(Backend):
             for term in idx(value):
                 xdoc.add_term(term)
 
+        xdoc.set_data(utils.json.dumps(stored))
+
+        return xdoc
+
+    def update(self, doc, docid=None, fail_if_exists=False):
+        if docid is None:
+            while True:
+                # random uuid
+                docid = str(uuid.uuid4())
+                docidterm = self.get_docid_term(docid)
+                if not self.db.term_exists(docidterm):
+                    break
+        else:
+            docid = str(docid)
+            docidterm = self.get_docid_term(docid)
+            if fail_if_exists and not self.db.term_exists(docidterm):
+                raise multisearch.errors.DocExistsError(
+                    "Document with ID %r already exists" % docid)
+
+        if isinstance(doc, xapian.Document):
+            xdoc = doc
+        else:
+            xdoc = self.process(doc)
+        xdoc.add_term(docidterm)
         self.db.replace_document(docidterm, xdoc)
         return docid
 
     def delete(self, docid, fail_if_missing=False):
-        docidterm = "!%s" % docid
+        docidterm = get_docid_term(docid)
         if fail_if_missing and not self.db.term_exists(docidterm):
             raise multisearch.errors.DocNotFoundError(
                 "No document with ID %r found when deleting" % docid)
