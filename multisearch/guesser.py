@@ -24,28 +24,43 @@ __docformat__ = "restructuredtext en"
 
 from schema import Schema
 
+class GuesserMetaClass(type):
+    def __new__(meta, classname, bases, classDict):
+        classDict = dict(classDict)
+        classDict['_classname'] = classname
+        return type.__new__(meta, classname, bases, classDict)
+
 class Guesser(object):
     """Base class of field type guessers.
 
     """
+
+    __metaclass__ = GuesserMetaClass
+
     def guess(self, fieldname, value):
         """Guess the field type and parameters for a field of a given name,
         and a sample value.
 
-        Guessers should return one of:
-
-         - A Schema
+        Guessers should return a dictionary of parameters for handling the
+        given field, or None if it has no guess to make (which allows later
+        guessers to make a guess).
 
         """
         raise NotImplementedError
+
+    def serialise(self):
+        return self._classname + self.guess
 
 class TextGuesser(Guesser):
     """A guesser for a field type, which always guesses TEXT.
 
     """
-    def guess(self, type, value):
-        return (Schema.TEXT, {})
+    def guess(self, fieldname, value):
+        return dict(type=Schema.TEXT)
 
 class ExtensionGuesser(object):
+    """A guesser for a field type, which guesses based on the extension.
+
     """
-    """
+    def guess(self, fieldname, value):
+        ext = fieldname.rsplit('_', 2)
