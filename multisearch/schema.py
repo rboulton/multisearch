@@ -37,20 +37,25 @@ SCHEMA_VERSION = 1
 class Schema(object):
     """A schema, mapping fields to types.
 
+    Schemas may be subclassed by backends to provide new field types, or to
+    provide new indexers or query generators.
+
     """
 
     # The known field types
     TEXT = 0 # "Free text" - words, to be parsed.
     BLOB = 1 # A literal string of bytes - to be matched exactly.
 
+    # All known field types.
     alltypes = (TEXT, BLOB, )
 
-    indexers = {
+    # Indexer 
+    indexer_factories = {
         TEXT: processors.TextIndexer,
         BLOB: processors.BlobIndexer,
     }
 
-    generators = {
+    querygen_factories = {
         TEXT: processors.TextQueryGenerator,
         BLOB: processors.BlobQueryGenerator,
     }
@@ -65,31 +70,44 @@ class Schema(object):
         # parameters for the type.
         self.types = {}
 
-        # Flag to indicate whether the schema has been modified.
+        # Flag to indicate whether the schema has been modified from that stored in the DB
         # Callers should set this to False when the schema has been saved.
         self.modified = False
 
         # Callback, called when the schema is modified, and passed the schema.
-        def dummy_cb(): pass
-        self.on_modified = dummy_cb
+        self.on_modified = lambda : None
 
         # Flag to indicate when the schema is modifiable.
         # Some backends will set this to False.
         self.modifiable = True
 
-        # A cache of indexers for this schema.
+        # A cache of indexers for this schema (keyed by fieldname)
         self._indexer_cache = {}
 
-        # A cache of query generators for this schema.
+        # A cache of query generators for this schema (keyed by fieldname)
         self._generator_cache = {}
 
-    def _check_modifiable(self):
-        """CHeck that a schema is modifable.
+    def check_modifiable(self):
+        """Check that the schema is modifiable.
 
         """
         if not self.modifiable:
             raise errors.DbReadOnlyError("Attempt to modify schema for a "
                                          "readonly backend")
+
+    def clear_cache_for_field(self, fieldname):
+        """Clear cached values for a field.
+
+        This should be called when the configuration for a field is modified.
+
+        """
+        try:
+            del self._indexer_cache[fieldname]
+        except KeyError: pass
+
+        try:
+            del self._generator_cache[fieldname]
+        except KeyError: pass
 
     @staticmethod
     def unserialise(value):
@@ -129,10 +147,10 @@ class Schema(object):
     def set(self, fieldname, type, params):
         """Set the field type and parameters.
 
-        The field type cannot be changed once it is set.
+	For this backend, the field type cannot be changed once it is set.
 
         """
-        self._check_modifiable()
+        self.check_modifiable()
         assert type in self.alltypes
         params = dict(params)
         if fieldname in self.types:
@@ -177,7 +195,7 @@ class Schema(object):
         indexer = self._indexer_cache.get(fieldname)
         if indexer is None:
             type, params = self.get(fieldname)
-            indexer = self.indexers[type](fieldname, params)
+            indexer = self.indexer_factories[type](fieldname, params)
             self._indexer_cache[fieldname] = indexer
         return indexer
 
@@ -190,6 +208,6 @@ class Schema(object):
         generator = self._generator_cache.get(fieldname)
         if generator is None:
             type, params = self.get(fieldname)
-            generator = self.generators[type](fieldname, params)
+            generator = self.querygen_factories[type](fieldname, params)
             self._generator_cache[fieldname] = generator
         return generator
