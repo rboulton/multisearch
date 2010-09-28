@@ -26,12 +26,14 @@ perfect analogy).
 For the first release of multisearch, I aim to provide support for at least the
 following search engines::
 
- - Xapian: http://xapian.org
- - Lucene: FIXME - url
- - Solr: FIXME - url
- - Sphinx: FIXME - url
- - Elastic Search: FIXME - url
- - Whoosh: FIXME - url
+ - Xapian: http://xapian.org/
+ - Lucene: http://lucene.apache.org/
+ - Solr: http://lucene.apache.org/solr/
+ - Sphinx: http://www.sphinxsearch.com/
+ - Elastic Search: http://www.elasticsearch.com/
+ - Whoosh: http://bitbucket.org/mchaput/whoosh/wiki/Home
+
+Possible future backends include Toyko Dystopia, Redis, PostgreSQL and MySQL.
 
 Assumptions
 ===========
@@ -82,8 +84,8 @@ process handles incoming documents, and determines what kinds of searches can
 then be performed on the documents.  The schema maps each fieldname to
 configuration for that field.
 
-For some backends (eg, whoosh), the schema needs to be set before any data is
-indexed, and cannot be modified after data has been supplied.
+For some backends (eg, Whoosh, Sphinx), the schema needs to be set before any
+data is indexed, and cannot be modified after data has been supplied.
 
 For other backends, new fields can be added to the schema at any time, but the
 configuration for a field cannot be modified once it has been set.
