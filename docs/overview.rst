@@ -23,8 +23,8 @@ If you really want to, you can think of multisearch as the equivalent of an ORM
 for search engines (though there are also plenty of reasons that that's not a
 perfect analogy).
 
-For the first release of multisearch, I aim to provide support for at least the
-following search engines::
+For the 1.0 release of multisearch, I aim to provide support for at least the
+following search engines:
 
  - Xapian: http://xapian.org/
  - Lucene: http://lucene.apache.org/
@@ -68,8 +68,8 @@ alphanumeric characters and underscores in fieldnames.
 All backends will allow values to be unicode strings, but some may also other
 types, such as numbers, datetime objects, sequences
 
-Some backends, documents may be more complex than this: for example Elastic Search
-can quite reasonably be provided with a heirarchical object, and can be
+In some backends, documents may be more complex than this: for example Elastic
+Search can reasonably be provided with a heirarchical object, and can be
 configured to index such objects in quite sophisticated ways.
 
 The order in which the fieldname-value pairs are provided may be significant
@@ -95,12 +95,13 @@ time (though there may be some latency before searches are possible with the
 new schema).
 
 If a field is provided in an incoming document which is not listed in the
-schema, multisearch can do one of three things::
+schema, multisearch can do one of three things:
 
  - ignore the field (optionally producing a warning with the standard python
-   warning module)
- - raise an exception, so that the document containing the field is not indexed
-
+   warning module).
+ - raise an exception, so that the document containing the field is not
+   indexed.
+ - guess how to handle the field, and add it to the schema.
 
 Indexing
 --------
