@@ -17,29 +17,23 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-r"""Utility routines for multisearch.
+r"""A lazily packed and unpacked JSON object.
 
 """
 __docformat__ = "restructuredtext en"
 
+import copy
 try:
     import simplejson as json
 except ImportError:
     import json
-
-import re
-
-safe_backend_name_re = re.compile(r'^[a-z][a-z_]*$')
-
-def is_safe_backend_name(val):
-    return safe_backend_name_re.match(val) is not None
 
 class LazyJsonObject(object):
     """This behaves like a dict and lazily converts contents to and from JSON.
 
     """
     def __init__(self, json=None, data=None):
-        if json is None and data is None:
+        if (json is None or json == '') and data is None:
             data = {}
         self._json = json
         self._data = data
@@ -74,7 +68,21 @@ class LazyJsonObject(object):
         self._dump()
         return self._json
 
+    def copy_data(self):
+        """Get a (deep) copy of the data in the object."""
+        self._load()
+        return copy.deepcopy(self._data)
+
     def items(self):
+        """Iterate through the items in the object.
+
+        Note - to be really safe we'd apply copy.deepcopy() to each value
+        before returning it (the keys are strings, so we don't need to worry
+        about them).  However, that's probably a waste of time for almost all
+        users, so instead users simply should't modify the values returned by
+        this method.
+
+        """
         self._load()
         for kv in self._data.iteritems():
             yield kv
