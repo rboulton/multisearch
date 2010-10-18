@@ -69,7 +69,7 @@ All backends will allow values to be unicode strings, but some may also other
 types, such as numbers, datetime objects, sequences
 
 In some backends, documents may be more complex than this: for example Elastic
-Search can reasonably be provided with a heirarchical object, and can be
+Search can reasonably be provided with a hierarchical object, and can be
 configured to index such objects in quite sophisticated ways.
 
 The order in which the fieldname-value pairs are provided may be significant
