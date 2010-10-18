@@ -28,6 +28,7 @@ class LazyJsonObjectTest(unittest.TestCase):
         self.assertEqual(tuple(obj.items()), (("hi", 2),))
         obj['hello'] = 3
         self.assertEqual(tuple(sorted(obj.items())), (("hello", 3), ("hi", 2)))
+        self.assertEqual(obj.copy_data(), {"hi": 2, "hello": 3})
         self.assertEqual(utils.json.loads(obj.json), {"hi": 2, "hello": 3})
 
 if __name__ == '__main__':
