@@ -35,6 +35,11 @@ def with_backends(*args):
     """Decorator for calling a test with multiple different backends.
 
     """
+    def tidy(orig, wrapped):
+        wrapped.__name__ = orig.__name__
+        wrapped.__doc__ = orig.__doc__
+        wrapped.__dict__.update(orig.__dict__)
+        return wrapped
     def call_for_backends(backends, fn, self):
         for backend in backends:
             try:
@@ -48,7 +53,7 @@ def with_backends(*args):
         # Called as a decorator without arguments - just return the wrapped function.
         def do(self):
             call_for_backends(all_backends, args[0], self)
-        return do
+        return tidy(args[0], do)
 
     backends = args
     if not backends:
@@ -56,7 +61,7 @@ def with_backends(*args):
     def deco(fn):
         def do(self):
             call_for_backends(backends, fn, self)
-        return do
+        return tidy(fn, do)
     return deco
 
 class MultiSearchTestCase(unittest.TestCase):
