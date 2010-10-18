@@ -71,3 +71,11 @@ class MultiSearchTestCase(unittest.TestCase):
     def tearDown(self):
         if os.path.exists(self.tmpdir):
             shutil.rmtree(self.tmpdir)
+
+    def client(self, backend, readonly=False, dbnum=1):
+        """Make a client.
+
+        """
+        dbname = "db%d" % dbnum
+        client = multisearch.SearchClient(backend, path=os.path.join(self.tmpdir, dbname), readonly=readonly)
+        return client

@@ -35,7 +35,7 @@ class GenericTest(MultiSearchTestCase):
         """Test basic index and search operations.
 
         """
-        client = multisearch.SearchClient(backend, path=os.path.join(self.tmpdir, "db1"), readonly=False)
+        client = self.client(backend)
 
         self.assertEqual(client.document_count, 0)
         self.assertEqual(len(client), client.document_count)
