@@ -52,6 +52,10 @@ class LazyJsonObject(object):
         self._load()
         return self._data[key]
 
+    def get(self, key, default=None):
+        self._load()
+        return self._data.get(key, default)
+
     def __setitem__(self, key, value):
         self._load()
         self._json = None
