@@ -64,9 +64,12 @@ class Document(object):
     def data(self):
         """The data stored in the document.
         
-        This consists of all field values which were passed in which the schema
-        caused to be stored.  The values are returned as a sequence of
-        (fieldname, value) pairs, in the same order as indexed.
+        This consists of a dict of field values which were passed in which the
+        schema caused to be stored.
+
+        The data returned by this data shouldn't be modified (the effect of
+        modifying it will vary depending on the backend, and is not the
+        appropriate way to modify a document).
 
         """
         return self.get_data()
@@ -76,7 +79,7 @@ class Document(object):
         """The terms stored in the document.
 
         This consists of an iterator over, or sequence of, term objects generated from
-        field values by the actions in the schema.  items in the
+        field values by the actions in the schema.
 
         """
         return self.get_terms()
