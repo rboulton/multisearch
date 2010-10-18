@@ -50,6 +50,7 @@ class XapianDocument(multisearch.Document):
 
         """
         self.raw = raw
+        self._data = None
 
     def get_docid(self):
         tl = self.raw.termlist()
@@ -62,10 +63,22 @@ class XapianDocument(multisearch.Document):
         return term[1:]
 
     def get_data(self):
-        data = self.raw.get_data()
-        if len(data) == 0:
-            return {}
-        return utils.json.loads(data)
+        """Get the data stored in the document.
+
+        """
+        if self._data is None:
+ 	    self._data = utils.LazyJsonObject(json=self.raw.get_data())
+        return self._data.copy_data()
+
+    def append_to_field(self, fieldname, value):
+        """Append a value to a field in the data stored in the document.
+
+        """
+        if self._data is None:
+ 	    self._data = utils.LazyJsonObject(json=self.raw.get_data())
+        fdata = self._data.get(fieldname, [])
+        fdata.append(value)
+        self._data[fieldname] = fdata
 
     def get_terms(self):
         FIXME
@@ -214,22 +227,23 @@ class WritableBackend(Backend):
         """Process an incoming document into a Xapian document.
 
         """
-        xdoc = xapian.Document()
+        xdoc = XapianDocument(xapian.Document())
 
         stored = {}
         #FIXME - should be a standard way for indexers to add to the document
 
-        for fieldname, value in doc:
+        for fieldname, value in utils.iter_doc_fields(doc):
             self.schema.guess(fieldname, value)
             idx = self.schema.indexer(fieldname)
             for term in idx(value):
-                xdoc.add_term(term)
+                xdoc.raw.add_term(term)
+            xdoc.append_to_field(fieldname, value)
 
-        xdoc.set_data(utils.json.dumps(stored))
+        xdoc.raw.set_data(xdoc._data.json)
 
-        return xdoc
+        return xdoc.raw
 
-    def update(self, doc, docid=None, fail_if_exists=False):
+    def update(self, doc, docid=None, fail_if_exists=False, assume_new=False):
         if docid is None:
             while True:
                 # random uuid

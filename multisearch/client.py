@@ -104,7 +104,7 @@ class SearchClient(object):
         """
         return self.backend.commit()
 
-    def update(self, doc, docid=None, fail_if_exists=False):
+    def update(self, doc, docid=None, fail_if_exists=False, assume_new=False):
         """Add or update a document.
 
         `doc` is either:
@@ -118,10 +118,7 @@ class SearchClient(object):
         The order of values within a field is often significant (for example,
         for phrase searches, phrases may be allowed to run from the end of one
         field to the start of another), but the relative order of fields is
-        usually not significant.  Whether order is significant in either case
-        depends on the processing assigned to the fields in question by the
-        schema; if the relative order of fields is important, provide `doc` as
-        a sequence.
+        not significant.
 
         `docid` is a unique identifier used to identify the document.  If this
         is not specified, a new identifier will be allocated automatically.
@@ -131,23 +128,20 @@ class SearchClient(object):
         a document with the same ID already exists.  Otherwise, any existing
         document with the same document ID will be replaced by this call.
 
+	If `assume_new` is set to True, the backend may choose not to check
+	whether the document ID is already in use, and instead assume that it
+	is not in use.  Skipping this check allows a small speed improvement.
+	However, if this is used incorrectly (ie, when the document ID is
+	already in use), this may result in multiple documents with the same
+	ID entering the database, which may cause various problems.
+
         This usually returns the unique identifier used for the document.  With
         some backends, it may also return None if no identifier was supplied
         and an identifier has not yet been allocated at the time this method
         returns.
 
         """
-        if isinstance(doc, dict):
-            flatdoc = []
-            for fieldname, values in doc.iteritems():
-                if isinstance(values, basestring):
-                    flatdoc.append((fieldname, values))
-                elif hasattr(values, '__iter__'):
-                    flatdoc.extend(((fieldname, value) for value in values))
-                else:
-                    flatdoc.append((fieldname, values))
-            doc = flatdoc
-        return self.backend.update(doc, docid, fail_if_exists)
+        return self.backend.update(doc, docid, fail_if_exists, assume_new)
 
     def delete(self, docid, fail_if_missing=False):
         """Delete a document, given its docid.
