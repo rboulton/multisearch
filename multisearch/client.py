@@ -36,17 +36,17 @@ _factories = {}
 def get_factory(type):
     """Get a backend factory.
 
+    Raises KeyError or ImportError if the backend isn't known or has missing
+    dependencies.
+
     """
     if not utils.is_safe_backend_name(type):
         raise KeyError("Backend type %r not known" % type)
     factory = _factories.get(type, None)
     if factory is None:
         module_name = "multisearch.backends.%s_backend" % type
-        try:
-            m = __import__(module_name, fromlist=['BackendFactory'], level=0)
-            factory = m.SearchClient
-        except ImportError, e:
-            raise KeyError("Backend type %r not known, or missing dependencies: %s" % (type, e))
+        m = __import__(module_name, fromlist=['BackendFactory'], level=0)
+        factory = m.SearchClient
         _factories[type] = factory
     return factory
 
