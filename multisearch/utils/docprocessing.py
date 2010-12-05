@@ -47,3 +47,6 @@ def iter_doc_fields(doc):
                 yield (fieldname, value)
         else:
             yield (fieldname, values)
+
+def make_docid():
+    docid = str(uuid.uuid4())

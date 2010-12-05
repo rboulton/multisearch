@@ -24,4 +24,4 @@ __docformat__ = "restructuredtext en"
 
 from multisearch.utils.lazyjson import json, LazyJsonObject
 from multisearch.utils.validation import is_safe_backend_name
-from multisearch.utils.docprocessing import iter_doc_fields
+from multisearch.utils.docprocessing import iter_doc_fields, make_docid
