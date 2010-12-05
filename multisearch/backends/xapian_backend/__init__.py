@@ -1,1 +1,1 @@
-from client import BackendFactory
+from client import SearchClient

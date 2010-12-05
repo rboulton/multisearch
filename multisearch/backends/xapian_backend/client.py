@@ -22,6 +22,7 @@ r"""Xapian backend.
 """
 __docformat__ = "restructuredtext en"
 
+from multisearch.utils.closed import ClosedObject
 import multisearch.backends.xapian_backend.errors
 import multisearch.client
 import multisearch.errors
@@ -31,16 +32,16 @@ from multisearch import utils
 import uuid
 import xapian
 
-def BackendFactory(path=None, readonly=False, **kwargs):
+def SearchClient(path=None, readonly=False, **kwargs):
     """Factory for XapianBackends.
 
     """
     if path is None:
         raise multisearch.errors.BackendError("Missing path argument")
     if readonly:
-        return ReadonlyBackend(path)
+        return ReadonlySearchClient(path)
     else:
-        return WritableBackend(path)
+        return WritableSearchClient(path)
 
 class XapianDocument(multisearch.Document):
     def __init__(self, raw):
@@ -53,6 +54,9 @@ class XapianDocument(multisearch.Document):
         self._data = None
 
     def get_docid(self):
+        """Get the document's id.
+
+        """
         tl = self.raw.termlist()
         try:
             term = tl.skip_to("!").term
@@ -118,21 +122,51 @@ class Results(object):
     def __len__(self):
         return len(self.mset)
 
-class Backend(object):
-    """Base class for Xapian Backends.
+class BaseSearchClient(object):
+    """Base SearchClient class for Xapian.
 
     """
     def __init__(self):
         serialised_schema = self.db.get_metadata("__ms:schema")
-        self.schema = Schema.unserialise(serialised_schema)
+        self._schema = Schema.unserialise(serialised_schema)
+
+    @property
+    def schema(self):
+        """Get the schema in use by this client.
+
+        """
+        return self._schema
 
     def close(self):
-        self.db.close()
+        """Close any open resources.
 
-    def get_document_count(self):
+        """
+        self.db.close()
+        self.db = ClosedObject()
+
+    @property
+    def document_count(self):
+        """Return the number of documents.
+
+        """
         return self.db.get_doccount()
 
-    def get_document_iter(self):
+    def __len__(self):
+        """Return the number of documents.
+
+        """
+        return self.db.get_doccount()
+
+    def iter_documents(self):
+        """Iterate through all the documents.
+
+        """
+        return DocumentIter(self.db, self.db.postlist(''))
+
+    def __iter__(self):
+        """Iterate through all the documents.
+
+        """
         return DocumentIter(self.db, self.db.postlist(''))
 
     @staticmethod
@@ -142,6 +176,11 @@ class Backend(object):
         return "!%s" % docid
 
     def get_document(self, docid):
+        """Get a document, given a document ID.
+
+        Raise KeyError if the document does not exist.
+
+        """
         docidterm = self.get_docid_term(docid)
         while True:
             try:
@@ -156,6 +195,10 @@ class Backend(object):
 
     def document_exists(self, docid):
         return self.db.term_exists(self.get_docid_term(docid))
+
+    def query(self, fieldname, value, *args, **kwargs):
+        qg = self.schema.query_generator(fieldname)
+        return qg(value, *args, **kwargs).connect(self)
 
     def compile(self, query):
         """Make a xapian Query from a query tree.
@@ -185,12 +228,18 @@ class Backend(object):
             return xapian.Query(query.default_op,
                                 [xapian.Query(term) for term in query.terms])
         elif isinstance(query, multisearch.queries.QuerySimilar):
+            FIXME # implement
             return xapian
         else:
             raise multisearch.errors.UnknownQueryTypeError(
                 "Query %s of unknown type" % query)
 
     def search(self, search):
+        """Perform a search.
+
+        The search should be an instance of multisearch.queries.Search.
+
+        """
         xq = self.compile(search.query)
         enq = xapian.Enquire(self.db)
         enq.set_query(xq)
@@ -198,24 +247,24 @@ class Backend(object):
                             search.end_rank - search.start_rank)
         return Results(self, mset)
 
-class ReadonlyBackend(Backend):
-    """A readonly Xapian Backend.
+class ReadonlySearchClient(BaseSearchClient):
+    """A readonly Xapian SearchClient.
 
     """
     def __init__(self, path):
         self.db = xapian.Database(path)
         self.path = path
-        Backend.__init__(self)
+        BaseSearchClient.__init__(self)
         self.schema.modifiable = False
 
-class WritableBackend(Backend):
-    """A readonly Xapian Backend.
+class WritableSearchClient(BaseSearchClient):
+    """A writable Xapian SearchClient.
 
     """
     def __init__(self, path):
         self.db = xapian.WritableDatabase(path, xapian.DB_CREATE_OR_OPEN)
         self.path = path
-        Backend.__init__(self)
+        BaseSearchClient.__init__(self)
 
     def commit(self):
         if self.schema.modified:
@@ -247,7 +296,7 @@ class WritableBackend(Backend):
         if docid is None:
             while True:
                 # random uuid
-                docid = str(uuid.uuid4())
+                docid = utils.make_docid()
                 docidterm = self.get_docid_term(docid)
                 if not self.db.term_exists(docidterm):
                     break
@@ -267,7 +316,7 @@ class WritableBackend(Backend):
         return docid
 
     def delete(self, docid, fail_if_missing=False):
-        docidterm = get_docid_term(docid)
+        docidterm = self.get_docid_term(docid)
         if fail_if_missing and not self.db.term_exists(docidterm):
             raise multisearch.errors.DocNotFoundError(
                 "No document with ID %r found when deleting" % docid)

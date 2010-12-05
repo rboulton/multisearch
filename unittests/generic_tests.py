@@ -40,15 +40,19 @@ class GenericTest(MultiSearchTestCase):
         self.assertEqual(client.document_count, 0)
         self.assertEqual(len(client), client.document_count)
 
-        doc = {
+        indoc = {
             'title': 'My first document',
             'text': "This is a very simple document that we'd like to index",
         }
-        id1 = client.update(doc, docid=1)
+        id1 = client.update(indoc, docid=1)
         self.assertEqual(id1, '1')
         self.assertEqual(client.document_count, 1)
         self.assertEqual(list(sorted(doc.docid for doc in client.iter_documents())), ['1'])
-        self.assertEqual(list(sorted((doc.docid, doc.data) for doc in client.iter_documents())), ['1'])
+        self.assertEqual(list(sorted((doc.docid, doc.data) for doc in client.iter_documents())),
+                         [('1', {
+                           'title': ['My first document'],
+                           'text': ["This is a very simple document that we'd like to index"],
+                         })])
         r = client.query(u'title', u'first').search(0, 10)
         self.assertEqual(len(r), 1)
         self.assertEqual(list(doc.docid for doc in r), ['1'])

@@ -22,7 +22,7 @@ r"""Support utilities for closed objects.
 """
 __docformat__ = "restructuredtext en"
 
-import errors
+import multisearch.errors
 
 class ClosedObject(object):
     """A perpetually closed object.
