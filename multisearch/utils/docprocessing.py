@@ -52,3 +52,4 @@ def iter_doc_fields(doc):
 
 def make_docid():
     docid = str(uuid.uuid4())
+    return docid
