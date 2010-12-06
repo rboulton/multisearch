@@ -11,17 +11,19 @@ engine to be used.
 Example
 -------
 
+Create a client, add a document, then perform a search for it.
+
 >>> import multisearch
 >>> s = multisearch.SearchClient('xapian', 'testdb', readonly=False)
 >>> docid = s.update({
 ...                'title': 'My first document',
 ...                'text': "This is a very simple document that we'd like to index",
 ...                })
->>> print repr(docid)
-'1'
->>> r = s.query(u'title', u'first').search(0, 10)
->>> print list(r)
-['1']
+>>> print docid                                                     # doctest: +SKIP
+7feedfd6-bbc4-4247-be04-0436928eccf3
+>>> search = s.query(u'title', u'first').search(0, 10)
+>>> print [result.data for result in search]
+[{'text': ["This is a very simple document that we'd like to index"], 'title': ['My first document']}]
 
 Features
 --------
