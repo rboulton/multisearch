@@ -29,7 +29,6 @@ import multisearch.errors
 import multisearch.queries
 from multisearch.schema import Schema
 from multisearch import utils
-import uuid
 import xapian
 
 def SearchClient(path=None, readonly=False, **kwargs):
@@ -295,7 +294,6 @@ class WritableSearchClient(BaseSearchClient):
     def update(self, doc, docid=None, fail_if_exists=False, assume_new=False):
         if docid is None:
             while True:
-                # random uuid
                 docid = utils.make_docid()
                 docidterm = self.get_docid_term(docid)
                 if not self.db.term_exists(docidterm):

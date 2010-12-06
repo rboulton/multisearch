@@ -22,6 +22,8 @@ r"""Document processing routines.
 """
 __docformat__ = "restructuredtext en"
 
+import uuid
+
 def iter_doc_fields(doc):
     """Iterate through the fields in a document-like structure.
 
