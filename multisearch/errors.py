@@ -36,7 +36,7 @@ class DocExistsError(SearchClientError):
     """
     def __init__(self, docid):
         self.docid = docid
-        self.message = "Document %r already existed" % docid
+        self.msg = "Document %r already existed" % docid
 
 class DocNotFoundError(SearchClientError):
     """A document specified by an id wasn't found.
@@ -46,7 +46,7 @@ class DocNotFoundError(SearchClientError):
     """
     def __init__(self, docid):
         self.docid = docid
-        self.message = "Document %r not found" % docid
+        self.msg = "Document %r not found" % docid
 
 class DbClosedError(SearchClientError):
     """An operation was attempted on a closed database.
@@ -60,7 +60,13 @@ class DbReadOnlyError(SearchClientError):
     """
     pass
 
-class UnknownQueryTypeError(SearchClientError):
+class FeatureNotAvailableError(SearchClientError):
+    """An attempt to use a feature which is not available for a backend.
+
+    """
+    pass
+
+class UnknownQueryTypeError(FeatureNotAvailableError):
     """An unknown query type was passed to a backend.
 
     """
@@ -69,10 +75,10 @@ class UnknownQueryTypeError(SearchClientError):
 class BackendError(SearchClientError):
     """An error produced by a backend.
 
-    This wraps an exception raised by a particular search backend.
-
-    The original exception can be accessed as the "original" property.
+    Whenever possible, backends should insert this as a base class of all
+    errors which may be produced by the backend, so that users can simply catch
+    BackendError to handle errors produced by the backend, regardless of which
+    backend is in use.
 
     """
-    def __init__(self, original):
-        self.original = original
+    pass
