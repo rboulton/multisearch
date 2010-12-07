@@ -3,6 +3,11 @@
 import os
 import shutil
 import subprocess
+import sys
+
+outdir = 'cover_html'
+if len(sys.argv) > 1:
+    outdir = sys.argv[1]
 
 try:
     shutil.rmtree('testdb')
@@ -11,10 +16,11 @@ except OSError: pass
 p = subprocess.Popen(("nosetests",
                       "--with-coverage",
                       "--cover-erase",
-                      "--cover-tests",
                       "--cover-inclusive",
                       "--cover-package=multisearch",
-                      "--cover-package=unittests",
+                      "--cover-html",
+                      "--cover-html-dir=%s" % outdir,
+                      "--cover-inclusive",
                       "--with-doctest",
                       "--doctest-extension=rst",
                       "unittests",

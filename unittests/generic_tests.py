@@ -53,22 +53,26 @@ class GenericTest(MultiSearchTestCase):
                            'title': ['My first document'],
                            'text': ["This is a very simple document that we'd like to index"],
                          })])
-        r = client.query(u'title', u'first').search(0, 10)
+        r = client.query(u'first', u'title').search(0, 10)
         self.assertEqual(len(r), 1)
         self.assertEqual(list(doc.docid for doc in r), ['1'])
-        r = (client.query(u'title', u'first') | client.query(u'text', u'very simple')).search(0, 10)
+        r = (client.query(u'first', u'title') | client.query(u'very simple', u'text')).search(0, 10)
         self.assertEqual(len(r), 1)
         self.assertEqual(list(doc.docid for doc in r), ['1'])
 
         client.delete(id1)
         self.assertEqual(client.document_count, 0)
         self.assertEqual(list(sorted(client.iter_documents())), [])
-        r = client.query(u'title', u'first').search(0, 10)
+        r = client.query(u'first', u'title').search(0, 10)
         self.assertEqual(len(r), 0)
         self.assertEqual(list(r), [])
-        r = (client.query(u'title', u'first') | client.query(u'text', u'very simple')).search(0, 10)
+        r = (client.query(u'first', u'title') | client.query(u'very simple', u'text')).search(0, 10)
         self.assertEqual(len(r), 0)
         self.assertEqual(list(r), [])
+
+    def test_invalid_backends(self):
+        self.assertRaises(ImportError, self.client, 'unknown')
+        self.assertRaises(ImportError, self.client, '!invalid')
 
 if __name__ == '__main__':
     unittest.main()

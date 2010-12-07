@@ -1,18 +1,16 @@
 Making a client
 ===============
 
-All operations on a search engine are performed via a SearchClient.  This
-class provides some basic behaviours which are shared across all search
-engines, but delegates all the hard work to a `backend`.
+All operations on a search engine are performed via a class implementing the
+SearchClient interface.  There are some methods which must be implemented by
+all backends, and others which may be omitted if the backend doesn't support
+the relevant features.
 
-To create a search client, call {{{multisearch.SearchClient()}}}.  There is
-one required positional argument: the name of the backend to use.  Other
-arguments may be required or optional depending on the backend in use.
+To create a SearchClient there is a convenient factory function,
+{{{multisearch.SearchClient()}}}.  This takes one required positional argument,
+"type": the name of the backend type to use.  Other arguments depend on the
+backend, but the following are commonly used:
 
-Arguments
----------
-
- - `type`: The type of backend to create.
  - `path`: For disk-based backends: the path on disk to store data under.
  - `host`: For backends accessed over the network: the host to connect to for
    access to the backend.
@@ -25,3 +23,5 @@ Arguments
 
 Adding a document
 =================
+
+Documents can be added and updated using the SearchClient.
