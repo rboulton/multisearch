@@ -70,7 +70,7 @@ class XapianDocument(multisearch.Document):
 
         """
         if self._data is None:
- 	    self._data = utils.LazyJsonObject(json=self.raw.get_data())
+            self._data = utils.LazyJsonObject(json=self.raw.get_data())
         return self._data.copy_data()
 
     def append_to_field(self, fieldname, value):
@@ -78,7 +78,7 @@ class XapianDocument(multisearch.Document):
 
         """
         if self._data is None:
- 	    self._data = utils.LazyJsonObject(json=self.raw.get_data())
+            self._data = utils.LazyJsonObject(json=self.raw.get_data())
         fdata = self._data.get(fieldname, [])
         fdata.append(value)
         self._data[fieldname] = fdata
@@ -121,13 +121,14 @@ class Results(object):
     def __len__(self):
         return len(self.mset)
 
-class BaseSearchClient(object):
+class BaseSearchClient(multisearch.client.BaseSearchClient):
     """Base SearchClient class for Xapian.
 
     """
     def __init__(self):
         serialised_schema = self.db.get_metadata("__ms:schema")
         self._schema = Schema.unserialise(serialised_schema)
+        super(BaseSearchClient, self).__init__()
 
     @property
     def schema(self):
@@ -150,19 +151,7 @@ class BaseSearchClient(object):
         """
         return self.db.get_doccount()
 
-    def __len__(self):
-        """Return the number of documents.
-
-        """
-        return self.db.get_doccount()
-
     def iter_documents(self):
-        """Iterate through all the documents.
-
-        """
-        return DocumentIter(self.db, self.db.postlist(''))
-
-    def __iter__(self):
         """Iterate through all the documents.
 
         """
@@ -193,9 +182,13 @@ class BaseSearchClient(object):
                 self.db.reopen()
 
     def document_exists(self, docid):
+        """Return True if a document with the given id exists, False if not.
+
+        """
         return self.db.term_exists(self.get_docid_term(docid))
 
-    def query(self, fieldname, value, *args, **kwargs):
+    def query(self, value, fieldname=None, *args, **kwargs):
+        # FIXME - document
         qg = self.schema.query_generator(fieldname)
         return qg(value, *args, **kwargs).connect(self)
 
@@ -253,7 +246,7 @@ class ReadonlySearchClient(BaseSearchClient):
     def __init__(self, path):
         self.db = xapian.Database(path)
         self.path = path
-        BaseSearchClient.__init__(self)
+        super(ReadonlySearchClient, self).__init__()
         self.schema.modifiable = False
 
 class WritableSearchClient(BaseSearchClient):
@@ -263,9 +256,12 @@ class WritableSearchClient(BaseSearchClient):
     def __init__(self, path):
         self.db = xapian.WritableDatabase(path, xapian.DB_CREATE_OR_OPEN)
         self.path = path
-        BaseSearchClient.__init__(self)
+        super(WritableSearchClient, self).__init__()
 
     def commit(self):
+        """Commit any changes which are currently in progress.
+
+        """
         if self.schema.modified:
             self.db.set_metadata("__ms:schema", self.schema.serialise())
             self.schema.modified = False
