@@ -41,24 +41,14 @@ class Schema(object):
     provide new indexers or query generators.
 
     """
+    indexer_factories = {}
+    querygen_factories = {}
 
-    # The known field types
-    TEXT = 0 # "Free text" - words, to be parsed.
-    BLOB = 1 # A literal string of bytes - to be matched exactly.
-
-    # All known field types.
-    alltypes = (TEXT, BLOB, )
-
-    # Indexer 
-    indexer_factories = {
-        TEXT: processors.TextIndexer,
-        BLOB: processors.BlobIndexer,
-    }
-
-    querygen_factories = {
-        TEXT: processors.TextQueryGenerator,
-        BLOB: processors.BlobQueryGenerator,
-    }
+    @classmethod
+    def register_type(cls, name, doc, indexer, querygen):
+        # FIXME - store the documentation for the type.
+        cls.indexer_factories[name] = indexer
+        cls.querygen_factories[name] = querygen
 
     def __init__(self):
         """Initialise the schema for a given database.
@@ -66,7 +56,7 @@ class Schema(object):
         """
         # The types which are known for this schema.
         # Keys are field names, values are 2-tuples (type, params), where type
-        # is a member of alltypes, and params is a dictionary of arbitrary
+        # is the name of the type, and params is a dictionary of arbitrary
         # parameters for the type.
         self.types = {}
 
@@ -122,7 +112,7 @@ class Schema(object):
                                "version %s - I understand version %s" %
                                (schema['version'], SCHEMA_VERSION))
         result = Schema()
-        result.types = dict(schema['fieldtypes'])
+        result.types = schema['fieldtypes']
         result.modified = False
         return result
 
@@ -130,9 +120,9 @@ class Schema(object):
         """Serialise the schema to json.
 
         """
-        schema = (
-            ('version', SCHEMA_VERSION),
-            ('fieldtypes', self.types),
+        schema = dict(
+            version=SCHEMA_VERSION,
+            fieldtypes=self.types,
         )
         return json.dumps(schema, sort_keys=True)
 
@@ -151,7 +141,6 @@ class Schema(object):
 
         """
         self.check_modifiable()
-        assert type in self.alltypes
         params = dict(params)
         if fieldname in self.types:
             if self.types[fieldname] != (type, params):
@@ -184,7 +173,7 @@ class Schema(object):
 
         """
         # Always guess TEXT, with no parameters, for now.
-        return (self.TEXT, {})
+        return ("TEXT", {})
 
     def indexer(self, fieldname):
         """Get the indexer for a field.
@@ -211,3 +200,13 @@ class Schema(object):
             generator = self.querygen_factories[type](fieldname, params)
             self._generator_cache[fieldname] = generator
         return generator
+
+Schema.register_type("TEXT",
+                     """Free text - words, to be parsed.""",
+                     processors.TextIndexer,
+                     processors.TextQueryGenerator)
+
+Schema.register_type("BLOB",
+                     """A literal string of bytes, to be matched exactly.""",
+                     processors.BlobIndexer,
+                     processors.BlobQueryGenerator)
