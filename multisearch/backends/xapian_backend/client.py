@@ -141,7 +141,8 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
         """Close any open resources.
 
         """
-        self.db.close()
+        if hasattr(self.db, 'close'):
+            self.db.close()
         self.db = ClosedObject()
 
     @property
@@ -328,5 +329,6 @@ class WritableSearchClient(BaseSearchClient):
         self.db.delete_document(docidterm)
 
     def destroy_database(self):
-        self.db.close()
+        if hasattr(self.db, 'close'):
+            self.db.close()
         shutil.rmtree(self.path)
