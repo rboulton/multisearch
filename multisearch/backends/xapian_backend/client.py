@@ -271,7 +271,12 @@ class WritableSearchClient(BaseSearchClient):
         if self.schema.modified:
             self.db.set_metadata("__ms:schema", self.schema.serialise())
             self.schema.modified = False
-        self.db.commit()
+        if hasattr(self.db, 'commit'):
+            self.db.commit()
+        else:
+            # Backwards compatibility: in the 1.0 series, databases don't have
+            # a commit method.
+            self.db.flush()
 
     def process(self, doc):
         """Process an incoming document into a Xapian document.
