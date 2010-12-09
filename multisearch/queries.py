@@ -203,6 +203,9 @@ class Query(object):
                              % self, conn, self.conn)
         return self
 
+    def order_by(self, criteria):
+        return Search(self).order_by
+
     def search(self, *args, **kwargs):
         """Make a search using this query.
 
@@ -359,41 +362,84 @@ class QuerySimilar(Query):
         return "QuerySimilar(%r)" % (self.ids, )
 
 class Search(object):
-    def __init__(self, query, start_rank, end_rank, percent_cutoff=None):
-        self.query = query
-        self.start_rank = start_rank
-        self.end_rank = end_rank
-        self.percent_cutoff = percent_cutoff
-        self.results = None
+    def __init__(self, query, start_rank=0, end_rank=10, **kwargs):
+        self._query = query
+        self._params = p = dict(start_rank=start_rank, end_rank=end_rank)
+        for k, v in kwargs:
+            p[k] = v
+        self._results = None
+
+    def start_rank(self, start_rank):
+        """Specify the start rank for the search results.
+
+        """
+        self._params['start_rank'] = start_rank
+        self._results = None
+        return self
+
+    def end_rank(self, end_rank):
+        """Specify the end rank for the search results.
+
+        """
+        self._params['end_rank'] = end_rank
+        self._results = None
+        return self
+
+    def order_by(self, criteria):
+        """Set the order to return results in.
+
+        All backends should understand the following types of criteria (though
+        need not support them all; they should raise FeatureNotAvailableError
+        if the criteria are not supported).:
+
+         - A criteria which is a single string represents sorting by a field.
+           - If the string starts with a +, ascending sort order should be used
+             (ie, the lowest value in the field should be given a rank of 1, so
+             would usually appear at the top of a list).
+           - If the string starts with a -, descending sort order should be
+             used (ie, the highest value in the field should be given a rank of
+             1, so would usually appear at the top of a list).
+           - If the string is purely "-" or "+", sort by ascending or
+             descending relevance.
+         - A criteria which is a list or tuple of strings represents sorting
+           first by the criteria represented by the first string, followed by
+           sorting items which are equal according to all previous criteria by
+           the criteria represented by the next string.
+
+        Note that for most engines, the order used if order_by is not specified
+        would be "-" meaning "sort by descending relevance".
+
+        """
+        self._params['order_by'] = criteria
+        self._results = None
+        return self
+
+    @property
+    def results(self):
+        if self._results is None:
+            self.execute()
+        return self._results
 
     def __len__(self):
-        if self.results is None:
-            self.execute()
         return len(self.results)
 
     def __iter__(self):
-        if self.results is None:
-            self.execute()
         return iter(self.results)
 
     def execute(self):
         """Perform the search.
 
         """
-        if self.query.conn is None:
+        if self._query.conn is None:
             raise RuntimeError("Query was not connected to a database - can't "
                                "execute it.")
-        self.results = self.query.conn.search(self)
+        self._results = self._query.conn.search(self._query, self._params)
 
     def __unicode__(self):
-        r = u"%r, %d, %d" % (self.query, self.start_rank, self.end_rank)
-        if self.percent_cutoff is not None and self.percent_cutoff > 0:
-            r += u", %d" % self.percent_cutoff
+        r = u"%r, %d" % (self._query, self._params)
         return u"Search(%s)" % r
     def __repr__(self):
-        r = "%r, %d, %d" % (self.query, self.start_rank, self.end_rank)
-        if self.percent_cutoff is not None and self.percent_cutoff > 0:
-            r += ", %d" % self.percent_cutoff
+        r = "%r, %d" % (self._query, self._params)
         return "Search(%s)" % r
 
 

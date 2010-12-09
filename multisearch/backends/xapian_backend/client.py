@@ -226,17 +226,23 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
             raise multisearch.errors.UnknownQueryTypeError(
                 "Query %s of unknown type" % query)
 
-    def search(self, search):
+    def search(self, query, params):
         """Perform a search.
 
-        The search should be an instance of multisearch.queries.Search.
+        The query should be an instance of multisearch.queries.Query, and the
+        params should be a dict of parameters.
 
         """
-        xq = self.compile(search.query)
+        xq = self.compile(query)
         enq = xapian.Enquire(self.db)
         enq.set_query(xq)
-        mset = enq.get_mset(search.start_rank,
-                            search.end_rank - search.start_rank)
+
+        order_by = params.get('order_by')
+        if order_by is not None:
+            enq.set_sort_by_value() # FIXME
+
+        mset = enq.get_mset(params['start_rank'],
+                            params['end_rank'] - params['start_rank'])
         return Results(self, mset)
 
 class ReadonlySearchClient(BaseSearchClient):
