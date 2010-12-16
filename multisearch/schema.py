@@ -65,7 +65,7 @@ class Schema(object):
         self.modified = False
 
         # Callback, called when the schema is modified, and passed the schema.
-        self.on_modified = lambda : None
+        self.on_modified = lambda schema: None
 
         # Flag to indicate when the schema is modifiable.
         # Some backends will set this to False.
@@ -150,7 +150,7 @@ class Schema(object):
             return
         self.types[fieldname] = (type, params)
         self.modified = True
-        self.on_modified()
+        self.on_modified(self)
 
     def guess(self, fieldname, value):
         """Guess the type and parameters for a field, given its value.
