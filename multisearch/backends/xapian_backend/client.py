@@ -27,9 +27,90 @@ import multisearch.backends.xapian_backend.errors
 import multisearch.client
 import multisearch.errors
 import multisearch.queries
-from multisearch.schema import Schema
+from multisearch.utils.jsonschema import JsonSchema
 from multisearch import utils
 import xapian
+
+class Schema(JsonSchema):
+    types = {}
+
+    @classmethod
+    def register_type(cls, name, doc, indexer, querygen):
+        cls.types[name] = (doc, indexer, querygen)
+
+    def prefix_from_fieldname(self, fieldname):
+        return 'X' + ''.join(c.upper() for c in fieldname if c.isalnum())
+
+    def guess(self, fieldname, value):
+        """Guess the route, type and parameters for a field, given its value.
+
+        If the field is not known already, this guesses what route, field type
+        and parameters would be appropriate, and sets the schema accordingly.
+
+
+        """
+        if fieldname in self.routes or fieldname in self.types:
+            return
+        self.set_route(fieldname, ("", fieldname))
+        self.set(fieldname, "TEXT", {
+                 'prefix': self.prefix_from_fieldname(fieldname),
+                 })
+        self.set('', "TEXT", {'prefix': ''})
+
+    def make_indexer(self, type, fieldname, params):
+        """Get the indexer for a field.
+
+        Raises KeyError if the field is not in the schema.
+
+        """
+        return self.types[type][1](fieldname, params)
+
+    def make_query_generator(self, fieldname):
+        """Get a query generator for a field.
+
+        Raises KeyError if the field is not in the schema.
+
+        """
+        return self.types[type][2](fieldname, params)
+
+class XapianTextIndexer(object):
+    def __init__(self, fieldname, params):
+        self.fieldname = fieldname
+        self.tg = TermGenerator()
+
+        self.prefix = str(params.get('prefix', ''))
+        self.weight = int(params.get('weight', 1))
+        if params.get('positions', False):
+            self.idx_method = self.tg.index_text
+        else:
+            self.idx_method = self.tg.index_text_without_positions
+
+    def new_doc(self, xdoc):
+        self.tg.set_document(xdoc)
+        self.tg.set_termpos(0)
+
+    def __call__(self, stored, value, route_params, state):
+
+        if isinstance(values, basestring):
+            values = (values, )
+        for value in values:
+            self.idx_method(value, self.weight, self.prefix)
+
+class XapianTextQueryGenerator(object):
+    def __init__(self, fieldname, params):
+        self.fieldname = fieldname
+        
+
+Schema.register_type("TEXT",
+                     """Free text - words, to be parsed.""",
+                     XapianTextIndexer,
+                     XapianTextQueryGenerator)
+
+Schema.register_type("BLOB",
+                     """A literal string of bytes, to be matched exactly.""",
+                     XapianBlobIndexer,
+                     XapianBlobQueryGenerator)
+
 
 def SearchClient(path=None, readonly=False, **kwargs):
     """Factory for XapianBackends.
@@ -43,14 +124,13 @@ def SearchClient(path=None, readonly=False, **kwargs):
         return WritableSearchClient(path)
 
 class XapianDocument(multisearch.Document):
-    def __init__(self, raw):
+    def __init__(self, raw, idprefix):
         """Create a XapianDocument.
 
         `raw` is the Xapian Document object wrapped by this.
 
         """
         self.raw = raw
-        self._data = None
 
     def get_docid(self):
         """Get the document's id.
@@ -65,26 +145,25 @@ class XapianDocument(multisearch.Document):
             return None
         return term[1:]
 
+    def set_docid(self, newid):
+        oldid = self.get_docid()
+        if oldid is not None:
+            self.raw.remove_term('!%s' % oldid)
+
+        if newid is not None:
+            self.raw.add_term('!%s' % newid, 0)
+
     def get_data(self):
         """Get the data stored in the document.
 
         """
-        if self._data is None:
-            self._data = utils.LazyJsonObject(json=self.raw.get_data())
-        return self._data.copy_data()
+        return utils.json.loads(self.raw.get_data())
 
-    def append_to_field(self, fieldname, value):
-        """Append a value to a field in the data stored in the document.
+    def set_data(self, data):
+        """Set the data stored in the document.
 
         """
-        if self._data is None:
-            self._data = utils.LazyJsonObject(json=self.raw.get_data())
-        fdata = self._data.get(fieldname, [])
-        fdata.append(value)
-        self._data[fieldname] = fdata
-
-    def get_terms(self):
-        FIXME
+        self.raw.set_data(utils.json.dumps(data, separators=(',', ':')))
 
 class DocumentIter(object):
     """Iterate through a set of documents.
@@ -161,8 +240,9 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
     @staticmethod
     def get_docid_term(docid):
         """Get the term used to reference a given document ID.
+
         """
-        return "!%s" % docid
+        return '!' + str(docid)
 
     def get_document(self, docid):
         """Get a document, given a document ID.
@@ -283,21 +363,25 @@ class WritableSearchClient(BaseSearchClient):
         """Process an incoming document into a Xapian document.
 
         """
-        xdoc = XapianDocument(xapian.Document())
+        xdoc = xapian.Document()
+        s = self.schema
 
         stored = {}
-        #FIXME - should be a standard way for indexers to add to the document
+        state = {}
 
+        fields_seen = set()
         for fieldname, value in utils.iter_doc_fields(doc):
-            self.schema.guess(fieldname, value)
-            idx = self.schema.indexer(fieldname)
-            for term in idx(value):
-                xdoc.raw.add_term(term)
-            xdoc.append_to_field(fieldname, value)
+            s.guess(fieldname, value)
+            for destfield, route_params in s.get_route(fieldname):
+                idx = self.schema.indexer(destfield)
+                if destfield not in fields_seen:
+                    fields_seen.add(destfield)
+                    idx.new_doc(xdoc)
+                idx(stored, value, route_params, state)
 
-        xdoc.raw.set_data(xdoc._data.json)
-
-        return xdoc.raw
+        result = XapianDocument(xdoc)
+        result.set_data(stored)
+        return result
 
     def update(self, doc, docid=None, fail_if_exists=False, assume_new=False):
         if docid is None:
@@ -316,7 +400,7 @@ class WritableSearchClient(BaseSearchClient):
         if isinstance(doc, xapian.Document):
             xdoc = doc
         else:
-            xdoc = self.process(doc)
+            xdoc = self.process(doc).raw
         xdoc.add_term(docidterm)
         self.db.replace_document(docidterm, xdoc)
         return docid

@@ -42,13 +42,7 @@ def iter_doc_fields(doc):
         it = doc
 
     for fieldname, values in it:
-        if isinstance(values, basestring):
-            yield (fieldname, values)
-        elif hasattr(values, '__iter__'):
-            for value in values:
-                yield (fieldname, value)
-        else:
-            yield (fieldname, values)
+        yield (fieldname, values)
 
 def make_docid():
     docid = str(uuid.uuid4())

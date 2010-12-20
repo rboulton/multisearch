@@ -253,7 +253,7 @@ class QueryAnd(QueryCombination):
     op = Query.AND
 
 class QueryXor(QueryCombination):
-    """A query which matches a document if exactly one of its subqueries match.
+    """A query which matches a document if an odd number of its subqueries match.
 
     The weights for the returned query will be the sum of the weights of the
     subqueries which match.
