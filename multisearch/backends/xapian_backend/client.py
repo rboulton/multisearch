@@ -107,7 +107,7 @@ class Schema(JsonSchema):
 
         """
         schema = dict(
-            version=self.SCHEMA_FORMAT_VERSION,
+            format_version=self.SCHEMA_FORMAT_VERSION,
             fieldtypes=self.fieldtypes,
             routes=self.routes,
         )

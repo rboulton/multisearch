@@ -14,7 +14,7 @@ Example
 Create a client, add a document, then perform a search for it.
 
 >>> import multisearch
->>> s = multisearch.SearchClient('xapian', 'testdb', readonly=False)
+>>> s = multisearch.SearchClient('xapian', 'readme_testdb', readonly=False)
 >>> docid = s.update({
 ...                'title': 'My first document',
 ...                'text': "This is a very simple document that we'd like to index",

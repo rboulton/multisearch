@@ -10,7 +10,7 @@ if len(sys.argv) > 1:
     outdir = sys.argv[1]
 
 try:
-    shutil.rmtree('testdb')
+    shutil.rmtree('readme_testdb')
 except OSError: pass
 
 p = subprocess.Popen(("nosetests",
@@ -28,3 +28,8 @@ p = subprocess.Popen(("nosetests",
                       "docs"))
 
 sts = os.waitpid(p.pid, 0)[1]
+
+try:
+    shutil.rmtree('readme_testdb')
+except OSError: pass
+
