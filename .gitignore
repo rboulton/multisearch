@@ -2,3 +2,4 @@ redis
 *.pyc
 README.html
 .coverage
+cover_html
