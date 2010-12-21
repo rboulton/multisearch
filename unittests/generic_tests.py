@@ -53,7 +53,8 @@ class GenericTest(MultiSearchTestCase):
                            'title': ['My first document'],
                            'text': ["This is a very simple document that we'd like to index"],
                          })])
-        r = client.query(u'first', u'title').search(0, 10)
+#        r = client.query(u'first', u'title').search(0, 10)
+        r = client.query_field(u'title', u'first').search(0, 10)
         self.assertEqual(len(r), 1)
         self.assertEqual(list(doc.docid for doc in r), ['1'])
         r = (client.query(u'first', u'title') | client.query(u'very simple', u'text')).search(0, 10)

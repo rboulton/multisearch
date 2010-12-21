@@ -24,13 +24,6 @@ field.
 __docformat__ = "restructuredtext en"
 
 from multisearch import errors
-try:
-    from simplejson import json
-except ImportError:
-    import json
-
-# Schema version that this creates.
-SCHEMA_FORMAT_VERSION = 1
 
 class JsonSchema(object):
     """A schema mapping fields to types, with a JSON representation.
@@ -52,7 +45,7 @@ class JsonSchema(object):
         # The field types which are known for this schema.  Keys are field
         # names, values are 2-tuples (type, params), where type is the name of
         # the type, and params is a dictionary of parameters for the type.
-        self.types = {}
+        self.fieldtypes = {}
 
         # Flag to indicate whether the schema has been modified from that
         # stored in the DB. Callers should set this to False when the schema
@@ -71,43 +64,13 @@ class JsonSchema(object):
             raise errors.DbReadOnlyError("Attempt to modify schema for a "
                                          "readonly backend")
 
-    @staticmethod
-    def unserialise(value):
-        """Load the schema from json.
-
-        """
-        if value is None or value == '':
-            return JsonSchema()
-        schema = json.loads(value)
-        format_version = schema['format_version']
-        if format_version != SCHEMA_FORMAT_VERSION:
-            raise RuntimeError("Can't handle this version of the schema (got "
-                               "version %s - I understand version %s" %
-                               (format_version, SCHEMA_FORMAT_VERSION))
-        result = JsonSchema()
-        result.types = schema['fieldtypes']
-        result.routes = schema['routes']
-        result.modified = False
-        return result
-
-    def serialise(self):
-        """Serialise the schema to json.
-
-        """
-        schema = dict(
-            version=SCHEMA_FORMAT_VERSION,
-            fieldtypes=self.types,
-            routes=self.routes,
-        )
-        return json.dumps(schema, sort_keys=True)
-
     def get(self, fieldname):
         """Get the field type and parameters.
 
         Raises KeyError if the field is not known.
 
         """
-        return self.types[fieldname]
+        return self.fieldtypes[fieldname]
 
     def set(self, fieldname, type, params):
         """Set the field type and parameters.
@@ -117,13 +80,13 @@ class JsonSchema(object):
         """
         self.check_modifiable()
         params = dict(params)
-        if fieldname in self.types:
-            if self.types[fieldname] != (type, params):
-                raise RuntimeError("Cannot change field type "
-                                   "(for field %s)" % (fieldname, ))
+        if fieldname in self.fieldtypes:
+            if self.fieldtypes[fieldname] != (type, params):
+                raise errors.SearchClientError(
+                    "Cannot change field type (for field %s)" % (fieldname, ))
             # No change - just return
             return
-        self.types[fieldname] = (type, params)
+        self.fieldtypes[fieldname] = (type, params)
         self.modified = True
 
     def get_route(self, incoming_field):
@@ -175,29 +138,3 @@ class JsonSchema(object):
             indexer = self.make_indexer(type, fieldname, params)
             self._indexer_cache[fieldname] = indexer
         return indexer
-
-    def query_generator(self, fieldname):
-        """Get a query generator for a field.
-
-        Raises KeyError if the field is not in the schema.
-
-        """
-        generator = self._generator_cache.get(fieldname)
-        if generator is None:
-            type, params = self.get(fieldname)
-            generator = self.make_query_generator(type, fieldname, params)
-            self._generator_cache[fieldname] = generator
-        return generator
-
-    def make_indexer(self, type, fieldname, params):
-        """Make an indexer for a given field type, fieldname, and parameters.
-
-        """
-        raise NotImplementedError
-
-    def make_query_generator(self, type, fieldname, params):
-        """Make a query generator for a given field type, fieldname, and
-        parameters.
-
-        """
-        raise NotImplementedError

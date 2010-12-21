@@ -20,8 +20,13 @@ Create a client, add a document, then perform a search for it.
 ...                'text': "This is a very simple document that we'd like to index",
 ...                })
 >>> print docid                                                     # doctest: +SKIP
-7feedfd6-bbc4-4247-be04-0436928eccf3
->>> search = s.query(u'first', u'title').search(0, 10)
+7feedfd6bbc44247be040436928eccf3
+
+>>> search = s.query(u'first').search(0, 10)
+>>> print [result.data for result in search]
+[{'text': ["This is a very simple document that we'd like to index"], 'title': ['My first document']}]
+
+>>> search = s.query_field(u'title', u'first').search(0, 10)
 >>> print [result.data for result in search]
 [{'text': ["This is a very simple document that we'd like to index"], 'title': ['My first document']}]
 
@@ -33,8 +38,8 @@ Add, update, delete documents.
 Combine queries with AND, OR, NOT.  Python syntax is using the &, | and -
 operators:
 
->>> q1 = s.query(u'first', u'title')
->>> q2 = s.query(u'second', u'title')
+>>> q1 = s.query(u'first')
+>>> q2 = s.query(u'second')
 >>> qand = q1 & q2
 >>> print list(qand.search(0, 10))
 []

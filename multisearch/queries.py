@@ -23,6 +23,8 @@ r"""Abstract definitions of queries and searches.
 """
 __docformat__ = "restructuredtext en"
 
+import multisearch.errors
+
 class Query(object):
     """Base class of all queries.
 
@@ -431,8 +433,8 @@ class Search(object):
 
         """
         if self._query.conn is None:
-            raise RuntimeError("Query was not connected to a database - can't "
-                               "execute it.")
+            raise multisearch.errors.SearchClientError(
+                "Query was not connected to a database - can't execute it.")
         self._results = self._query.conn.search(self._query, self._params)
 
     def __unicode__(self):

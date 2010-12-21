@@ -45,5 +45,5 @@ def iter_doc_fields(doc):
         yield (fieldname, values)
 
 def make_docid():
-    docid = str(uuid.uuid4())
+    docid = uuid.uuid4().hex
     return docid
