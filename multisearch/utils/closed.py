@@ -22,7 +22,7 @@ r"""Support utilities for closed objects.
 """
 __docformat__ = "restructuredtext en"
 
-import multisearch.errors
+from multisearch import errors
 
 class ClosedObject(object):
     """A perpetually closed object.
@@ -41,6 +41,6 @@ class ClosedObject(object):
         """All other attributes are functions which raise an error.
 
         """
-        def raiseerror():
+        def raiseerror(*args, **kwargs):
             raise errors.DbClosedError("This database has already been closed")
         return raiseerror
