@@ -71,6 +71,21 @@ class GenericTest(MultiSearchTestCase):
         self.assertEqual(len(r), 0)
         self.assertEqual(list(r), [])
 
+    @with_backends
+    def test_close(self, backend):
+        client = self.client(backend)
+        indoc = {
+            'title': 'lorem',
+            'text': "ipsum",
+        }
+        id1 = client.update(indoc, docid=1)
+        self.assertEqual(client.document_count, 1)
+        client.close()
+        self.assertRaises(multisearch.errors.DbClosedError, client.update, indoc, docid=2)
+        client = self.client(backend)
+        id1 = client.update(indoc, docid=2)
+        self.assertEqual(client.document_count, 2)
+
     def test_invalid_backends(self):
         self.assertRaises(ImportError, self.client, 'unknown')
         self.assertRaises(ImportError, self.client, '!invalid')
