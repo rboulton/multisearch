@@ -47,6 +47,9 @@ class JsonSchema(object):
         # the type, and params is a dictionary of parameters for the type.
         self.fieldtypes = {}
 
+        # The field type guessers to use, in order.
+        self.guessers = []
+
         # Flag to indicate whether the schema has been modified from that
         # stored in the DB. Callers should set this to False when the schema
         # has been saved.
@@ -126,15 +129,39 @@ class JsonSchema(object):
         self.routes[incoming_field] = tuple(route)
         self.modified = True
 
-    def indexer(self, fieldname):
-        """Get the indexer for a field.
+    def guess(self, fieldname, value):
+        """Guess the route, type and parameters for a field, given its value.
 
-        Raises KeyError if the field is not in the schema.
+        If the field is not known already, this guesses what route, field type
+        and parameters would be appropriate, and sets the schema accordingly.
 
         """
-        indexer = self._indexer_cache.get(fieldname)
-        if indexer is None:
-            type, params = self.get(fieldname)
-            indexer = self.make_indexer(type, fieldname, params)
-            self._indexer_cache[fieldname] = indexer
-        return indexer
+        if fieldname in self.routes or fieldname in self.fieldtypes:
+            return
+        for guesser in self.guessers:
+            if guesser(self, fieldname, value):
+                return
+        raise errors.SearchClientError(
+                    "Cannot guess field type (for field %s)" % (fieldname, ))
+
+    def append_guesser(self, guesser):
+        """Append a guesser to the schema.
+
+        """
+        self.check_modifiable()
+        self.guessers.append(guesser)
+        self.modified = True
+
+    def clear_guessers(self):
+        self.check_modifiable()
+        self.guessers = []
+        self.modified = True
+
+    def fields_of_type(self, type):
+        """Get a list of the fieldnames for all fields of the given type.
+
+        """
+        return tuple(sorted(fieldname
+                            for (fieldname, (ftype, params))
+                            in self.fieldtypes.iteritems()
+                            if ftype == type))
