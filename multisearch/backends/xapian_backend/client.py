@@ -69,6 +69,23 @@ _opmap = {
     multisearch.queries.Query.NOT: xapian.Query.OP_AND_NOT,
 }
 
+class DefaultGuesser(object):
+    def __init__(self, **kwargs):
+        pass
+
+    def serialise(self):
+        return ('multisearch.backends.xapian_backend.client',
+                'DefaultGuesser', {})
+
+    def __call__(self, schema, fieldname, value):
+        schema.set_route(fieldname, ("", fieldname))
+        schema.set(fieldname, "TEXT", {
+                       'prefix': schema.prefix_from_fieldname(fieldname),
+                   })
+        if '' not in schema.fieldtypes:
+            schema.set('', "TEXT", {'prefix': '', 'store': False})
+        return True
+
 class Schema(JsonSchema):
     known_types = {}
 
@@ -81,6 +98,7 @@ class Schema(JsonSchema):
 
     def __init__(self):
         super(Schema, self).__init__()
+        self.append_guesser(DefaultGuesser())
 
     @classmethod
     def unserialise(cls, value):
@@ -99,6 +117,10 @@ class Schema(JsonSchema):
         result = Schema()
         result.fieldtypes = schema['fieldtypes']
         result.routes = schema['routes']
+        result.clear_guessers()
+        for module_name, name, kwargs in schema['guessers']:
+            m = __import__(module_name, fromlist=[name], level=0)
+            result.append_guesser(getattr(m, name)(**kwargs))
         result.modified = False
         return result
 
@@ -110,28 +132,12 @@ class Schema(JsonSchema):
             format_version=self.SCHEMA_FORMAT_VERSION,
             fieldtypes=self.fieldtypes,
             routes=self.routes,
+            guessers=[g.serialise() for g in self.guessers],
         )
         return json.dumps(schema, sort_keys=True)
 
     def prefix_from_fieldname(self, fieldname):
         return 'X' + ''.join(c.upper() for c in fieldname if c.isalnum())
-
-    def guess(self, fieldname, value):
-        """Guess the route, type and parameters for a field, given its value.
-
-        If the field is not known already, this guesses what route, field type
-        and parameters would be appropriate, and sets the schema accordingly.
-
-
-        """
-        if fieldname in self.routes or fieldname in self.fieldtypes:
-            return
-        self.set_route(fieldname, ("", fieldname))
-        self.set(fieldname, "TEXT", {
-                 'prefix': self.prefix_from_fieldname(fieldname),
-                 })
-        if '' not in self.fieldtypes:
-            self.set('', "TEXT", {'prefix': '', 'store': False})
 
     def indexer(self, fieldname):
         """Get the indexer for a field.
@@ -367,8 +373,10 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
         """Close any open resources.
 
         """
-        if hasattr(self.db, 'close'):
-            self.db.close()
+        if not isinstance(self.db, ClosedObject):
+            self.commit()
+            if hasattr(self.db, 'close'):
+                self.db.close()
         self.db = ClosedObject()
 
     @property
@@ -436,9 +444,8 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
 
         if not allow:
             allow = tuple(fieldname
-                          for (fieldname, (type, params))
-                          in self.schema.fieldtypes.iteritems()
-                          if type == 'TEXT' and fieldname != '')
+                          for fieldname in self.schema.fields_of_type('TEXT')
+                          if fieldname != '')
         if not deny:
             allow = tuple(fieldname
                           for fieldname in allow

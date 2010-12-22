@@ -31,14 +31,8 @@ class ClosedObject(object):
     to ensure that accesses will result in an appropriate error being raised.
 
     """
-    def close(self):
-        """Close an already closed object - no error.
-
-        """
-        pass
-
     def __getattr__(self, name):
-        """All other attributes are functions which raise an error.
+        """All attributes are functions which raise an error.
 
         """
         def raiseerror(*args, **kwargs):
