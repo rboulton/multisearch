@@ -80,9 +80,14 @@ class GenericTest(MultiSearchTestCase):
         }
         id1 = client.update(indoc, docid=1)
         self.assertEqual(client.document_count, 1)
+        oldschema = client.schema.serialise()
+        self.assertNotEqual(oldschema, '')
+        client.commit()
+        client.close()
         client.close()
         self.assertRaises(multisearch.errors.DbClosedError, client.update, indoc, docid=2)
         client = self.client(backend)
+        self.assertEqual(oldschema, client.schema.serialise())
         id1 = client.update(indoc, docid=2)
         self.assertEqual(client.document_count, 2)
 
