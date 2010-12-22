@@ -45,7 +45,7 @@ def get_factory(type):
     factory = _factories.get(type, None)
     if factory is None:
         module_name = "multisearch.backends.%s_backend" % type
-        m = __import__(module_name, fromlist=['BackendFactory'], level=0)
+        m = __import__(module_name, fromlist=['SearchClient'], level=0)
         factory = m.SearchClient
         _factories[type] = factory
     return factory
