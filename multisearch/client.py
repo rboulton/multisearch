@@ -127,6 +127,14 @@ class BaseSearchClient(object):
         """
         raise NotImplementedError
 
+    def flush(self):
+        """Empty any buffered changes; this minimises memory use, but does not
+        force changes to be committed (ie, to become visible in searches).
+
+        """
+        raise multisearch.errors.FeatureNotAvailableError
+
+
     def commit(self):
         """Commit any changes which are currently in progress.
 
