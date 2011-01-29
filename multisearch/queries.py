@@ -365,9 +365,10 @@ class QuerySimilar(Query):
 
 class Search(object):
     def __init__(self, query, start_rank=0, end_rank=10, **kwargs):
-        self._query = query
-        self._params = p = dict(start_rank=start_rank, end_rank=end_rank)
-        for k, v in kwargs:
+        self.query = query
+        start_rank = max(start_rank, 0)
+        self.params = p = dict(start_rank=start_rank, end_rank=end_rank)
+        for k, v in kwargs.iteritems():
             p[k] = v
         self._results = None
 
@@ -375,7 +376,8 @@ class Search(object):
         """Specify the start rank for the search results.
 
         """
-        self._params['start_rank'] = start_rank
+        start_rank = max(start_rank, 0)
+        self.params['start_rank'] = start_rank
         self._results = None
         return self
 
@@ -383,7 +385,7 @@ class Search(object):
         """Specify the end rank for the search results.
 
         """
-        self._params['end_rank'] = end_rank
+        self.params['end_rank'] = end_rank
         self._results = None
         return self
 
@@ -412,7 +414,7 @@ class Search(object):
         would be "-" meaning "sort by descending relevance".
 
         """
-        self._params['order_by'] = criteria
+        self.params['order_by'] = criteria
         self._results = None
         return self
 
@@ -432,16 +434,16 @@ class Search(object):
         """Perform the search.
 
         """
-        if self._query.conn is None:
+        if self.query.conn is None:
             raise multisearch.errors.SearchClientError(
                 "Query was not connected to a database - can't execute it.")
-        self._results = self._query.conn.search(self._query, self._params)
+        self._results = self.query.conn.search(self.query, self.params)
 
     def __unicode__(self):
-        r = u"%r, %d" % (self._query, self._params)
+        r = u"%r, %r" % (self.query, self.params)
         return u"Search(%s)" % r
     def __repr__(self):
-        r = "%r, %d" % (self._query, self._params)
+        r = "%r, %r" % (self.query, self.params)
         return "Search(%s)" % r
 
 

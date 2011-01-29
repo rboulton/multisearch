@@ -24,6 +24,7 @@ __docformat__ = "restructuredtext en"
 
 import multisearch.utils
 import multisearch.errors
+import multisearch.queries
 
 # Change to have a SearchClient, which is a factory method, and a
 # SearchClientBase, which backends subclass.  Make all the methods
@@ -118,6 +119,18 @@ class BaseSearchClient(object):
 
         """
         raise NotImplementedError
+
+    def query_all(self):
+        """Create a search which returns all documents.
+
+        """
+        return multisearch.queries.QueryAll().connect(self)
+
+    def query_none(self):
+        """Create a search which returns no documents.
+
+        """
+        return multisearch.queries.QueryNone().connect(self)
 
     def search(self, search):
         """Perform a search.
