@@ -31,6 +31,7 @@ class XapianBlobIndexer(object):
     Accepts the following parameters:
 
      - store: boolean.  If True, store the field values in the document data.
+     - slot: The slot number to use.
      - prefix: string.  The prefix to insert before terms.  Should follow
        Xapian conventions (ie, be composed of upper case ascii characters, and
        start with X if more than one character long).
@@ -40,6 +41,11 @@ class XapianBlobIndexer(object):
     def __init__(self, fieldname, params):
         self.fieldname = fieldname
         self.store = bool(params.get('store', True))
+        slot = params.get('slot', None)
+        if slot is not None:
+            slot = int(slot)
+            assert slot >= 0
+        self.slot = slot
         self.prefix = str(params.get('prefix', ''))
         self.weight = int(params.get('weight', 1))
         assert self.weight >= 0
@@ -58,6 +64,8 @@ class XapianBlobIndexer(object):
         if isinstance(values, basestring):
             values = (values, )
         for value in values:
+            if self.slot is not None:
+                self.xdoc.add_value(self.slot, value)
             if s is not None:
                 s.append(value)
             if value[0].isupper():
