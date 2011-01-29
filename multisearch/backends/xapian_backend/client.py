@@ -67,6 +67,7 @@ class Schema(JsonSchema):
     def __init__(self):
         super(Schema, self).__init__()
         self.append_guesser(DefaultGuesser())
+        self.next_slot = 0
 
     @classmethod
     def unserialise(cls, value):
@@ -89,6 +90,7 @@ class Schema(JsonSchema):
         for module_name, name, kwargs in schema['guessers']:
             m = __import__(module_name, fromlist=[name], level=0)
             result.append_guesser(getattr(m, name)(**kwargs))
+        result.next_slot = schema['next_slot']
         result.modified = False
         return result
 
@@ -101,6 +103,7 @@ class Schema(JsonSchema):
             fieldtypes=self.fieldtypes,
             routes=self.routes,
             guessers=[g.serialise() for g in self.guessers],
+            next_slot = self.next_slot,
         )
         return json.dumps(schema, sort_keys=True)
 
@@ -124,6 +127,10 @@ class Schema(JsonSchema):
         """
         type, params = self.get(fieldname)
         return self.known_types[type][2](fieldname, params)
+
+    def alloc_slot(self):
+        self.next_slot += 1
+        return self.next_slot - 1
 
 Schema.register_type("TEXT",
                      """Free text - words, to be parsed.""",
@@ -453,12 +460,12 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
                 ascending = False
                 order_by = order_by[1:]
             if order_by:
-                type, params = self.schema.get(order_by)
+                order_type, order_params = self.schema.get(order_by)
                 try:
-                    slot = params['slot']
+                    slot = order_params['slot']
                 except KeyError:
                     raise multisearch.errors.FeatureNotAvailableError("Cannot sort by this field type - no associated slot")
-                enq.set_sort_by_value(slot)
+                enq.set_sort_by_value(slot, not ascending)
 
         check_at_least = params.get('check_at_least', 0)
         if check_at_least == -1:
