@@ -24,6 +24,11 @@ __docformat__ = "restructuredtext en"
 
 from multisearch.utils.closed import ClosedObject
 import multisearch.backends.xapian_backend.errors
+from multisearch.backends.xapian_backend.types_blob import XapianBlobIndexer, XapianBlobQueryGenerator
+from multisearch.backends.xapian_backend.types_text import XapianTextIndexer, XapianTextQueryGenerator, parse_with_qp
+from multisearch.backends.xapian_backend.types_float import XapianFloatIndexer, XapianFloatQueryGenerator
+from multisearch.backends.xapian_backend.xquery import XapianQuery
+from multisearch.backends.xapian_backend.operators import _opmap
 import multisearch.client
 import multisearch.errors
 import multisearch.queries
@@ -31,43 +36,6 @@ from multisearch.utils.jsonschema import JsonSchema
 from multisearch.utils import json
 from multisearch import utils
 import xapian
-
-class XapianQuery(multisearch.queries.Query):
-    def __init__(self, xapq):
-        super(XapianQuery, self).__init__()
-        self.xapq = xapq
-        self.method = None
-        self.args = ()
-        self.kwargs = {}
-
-    def _set_params(self, method, args, kwargs):
-        self.method = method
-        self.args = args
-        self.kwargs = kwargs
-
-    def __unicode__(self):
-        if self.method is None:
-            return u'XapianQuery(%s)' % (self.xapq,)
-        else:
-            return u'XapianQuery(%s, %r, %r, %r)' % (self.xapq, self.method,
-                                                     self.args, self.kwargs)
-
-    def __repr__(self):
-        if self.method is None:
-            return u'<XapianQuery(%s)>' % (self.xapq,)
-        else:
-            return u'<XapianQuery(%s, %r, %r, %r)>' % (self.xapq, self.method,
-                                                       self.args, self.kwargs)
-
-    def __str__(self):
-        return u'<%s>' % (self.xapq, )
-
-_opmap = {
-    multisearch.queries.Query.OR: xapian.Query.OP_OR,
-    multisearch.queries.Query.AND: xapian.Query.OP_AND,
-    multisearch.queries.Query.XOR: xapian.Query.OP_XOR,
-    multisearch.queries.Query.NOT: xapian.Query.OP_AND_NOT,
-}
 
 class DefaultGuesser(object):
     def __init__(self, **kwargs):
@@ -157,110 +125,20 @@ class Schema(JsonSchema):
         type, params = self.get(fieldname)
         return self.known_types[type][2](fieldname, params)
 
-class XapianTextIndexer(object):
-    """Indexer for a text field.
-
-    Accepts the following parameters:
-
-     - store: boolean.  If True, store the field values in the document data.
-     - prefix: string.  The prefix to insert before terms.  Should follow
-       Xapian conventions (ie, be composed of upper case ascii characters, and
-       start with X if more than one character long).
-     - weight: integer (>= 0).  The weight bias to use for this field.
-     - positions: boolean.  If True, store position information.
-     - position_gap: integer (>= 0). The position gap to add between instances
-       of the field.
-     - lang: string.  The language to process the field contents as.  Should
-       be one of the languages supported by the version of Xapian in use.
-       Leave as an empty string to do no particular language specific
-       processing (in which case, words will be split on spaces and
-       punctuation).
-
-    """
-    def __init__(self, fieldname, params):
-        self.fieldname = fieldname
-        self.tg = xapian.TermGenerator()
-
-        self.store = bool(params.get('store', True))
-        self.prefix = str(params.get('prefix', ''))
-        self.weight = int(params.get('weight', 1))
-        assert self.weight >= 0
-        if bool(params.get('positions', False)):
-            self.idx_method = self.tg.index_text
-        else:
-            self.idx_method = self.tg.index_text_without_positions
-        self.position_gap = int(params.get('position_gap', 1))
-        self.lang = str(params.get('lang', ''))
-
-        if self.lang:
-            self.tg.set_stemmer(xapian.Stem(self.lang))
-
-    def new_doc(self, xdoc):
-        self.tg.set_document(xdoc)
-        self.tg.set_termpos(0)
-
-    def __call__(self, stored, values, route_params, state):
-        if self.store:
-            s = stored.get(self.fieldname, None)
-            if s is None:
-                stored[self.fieldname] = s = []
-        else:
-            s = None
-        if isinstance(values, basestring):
-            values = (values, )
-        for value in values:
-            self.idx_method(value, self.weight, self.prefix)
-            self.tg.increase_termpos(self.position_gap)
-            if s is not None:
-                s.append(value)
-
-def parse_with_qp(qp, query, baseflags, allow_wildcards):
-    extraflags = 0
-    if allow_wildcards:
-        extraflags |= xapian.QueryParser.FLAG_WILDCARD
-
-    try:
-        return qp.parse_query(query,
-                              baseflags | extraflags |
-                              xapian.QueryParser.FLAG_BOOLEAN)
-    except xapian.QueryParserError:
-        return qp.parse_query(query, baseflags | extraflags)
-
-class XapianTextQueryGenerator(object):
-    def __init__(self, fieldname, params):
-        self.fieldname = fieldname
-        self.qp = xapian.QueryParser()
-        self.prefix = str(params.get('prefix', ''))
-        self.qp.add_prefix('', self.prefix)
-
-        self.lang = str(params.get('lang', ''))
-        if self.lang:
-            self.qp.set_stemmer(xapian.Stem(lang))
-            self.qp.set_stemming_strategy(qp.STEM_SOME)
-
-        self.baseflags = (xapian.QueryParser.FLAG_LOVEHATE |
-                          xapian.QueryParser.FLAG_PHRASE |
-                          xapian.QueryParser.FLAG_AUTO_SYNONYMS |
-                          xapian.QueryParser.FLAG_AUTO_MULTIWORD_SYNONYMS)
-
-    def __call__(self, client, value,
-                 default_op=multisearch.queries.Query.AND,
-                 allow_wildcards=False):
-        self.qp.set_database(client.db)
-        self.qp.set_default_op(_opmap[default_op])
-
-        return XapianQuery(parse_with_qp(self.qp, value, self.baseflags,
-                                         allow_wildcards))
-
 Schema.register_type("TEXT",
                      """Free text - words, to be parsed.""",
                      XapianTextIndexer,
                      XapianTextQueryGenerator)
 
-#Schema.register_type("BLOB",
-#                     """A literal string of bytes, to be matched exactly.""",
-#                     XapianBlobIndexer,
-#                     XapianBlobQueryGenerator)
+Schema.register_type("BLOB",
+                     """A literal string of bytes, to be matched exactly.""",
+                     XapianBlobIndexer,
+                     XapianBlobQueryGenerator)
+
+Schema.register_type("FLOAT",
+                     """A floating point number, supporting exact matching or range searches.""",
+                     XapianFloatIndexer,
+                     XapianFloatQueryGenerator)
 
 
 def SearchClient(path=None, readonly=False, **kwargs):
@@ -317,19 +195,15 @@ class XapianDocument(multisearch.Document):
         """
         self.raw.set_data(json.dumps(data, separators=(',', ':')))
 
+class XapianResultDocument(XapianDocument):
+    def __init__(self, raw, client, rank):
+        super(XapianResultDocument, self).__init__(raw, client)
+        self.rank = rank
+
 class DocumentIter(object):
-    """Iterate through a set of documents.
-
-    """
-    def __init__(self, client, iter):
-        """Initialise the prefixed term iterator.
-
-        - `client` is the client.
-        - `iter` is the iterator to use, which should be at its start.
-
-        """
-        self.client = client
+    def __init__(self, iter, factory):
         self.iter = iter
+        self.factory = factory
 
     def __iter__(self):
         return self
@@ -339,18 +213,45 @@ class DocumentIter(object):
 
         """
         posting = self.iter.next()
-        return XapianDocument(self.client.db.get_document(posting.docid), self.client)
+        return self.factory(posting)
 
 class Results(object):
-    def __init__(self, client, mset):
+    def __init__(self, client, mset, start_rank):
         self.client = client
         self.mset = mset
+        self.start_rank = start_rank
+        self.end_rank = start_rank + len(mset)
 
     def __iter__(self):
-        return DocumentIter(self.client, iter(self.mset))
+        client = self.client
+        db = client.db
+        def factory(posting):
+            rawdoc = posting.document
+            doc = XapianResultDocument(rawdoc, client, posting.rank)
+            return doc
+
+        return DocumentIter(iter(self.mset), factory)
+
+    def at_rank(self, rank):
+        if self.start_rank > rank or self.end_rank <= rank:
+            raise IndexError("result requested at rank %d, which is outside the calculated range of %d-%d" % (rank, self.start_rank, self.end_rank - 1))
+        rawdoc = self.mset[rank - self.start_rank].document
+        return XapianResultDocument(rawdoc, self.client, rank)
 
     def __len__(self):
         return len(self.mset)
+
+    @property
+    def matches_lower_bound(self):
+        return self.mset.get_matches_lower_bound()
+
+    @property
+    def matches_estimated(self):
+        return self.mset.get_matches_estimated()
+
+    @property
+    def matches_upper_bound(self):
+        return self.mset.get_matches_upper_bound()
 
 class BaseSearchClient(multisearch.client.BaseSearchClient):
     """Base SearchClient class for Xapian.
@@ -390,7 +291,11 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
         """Iterate through all the documents.
 
         """
-        return DocumentIter(self, self.db.postlist(''))
+        def factory(posting):
+            rawdoc = self.db.get_document(posting.docid)
+            return XapianDocument(rawdoc, self)
+
+        return DocumentIter(self.db.postlist(''), factory)
 
     def get_docid_term(self, docid):
         """Get the term used to reference a given document ID.
@@ -508,8 +413,8 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
                     "Query operator unknown (%s)" % query.op)
             return xapian.Query(op, subqs)
         elif isinstance(query, multisearch.queries.QueryMultWeight):
-            return xapian.Query(xapian.Query.OP_MULT_WEIGHT,
-                                self.compile(query.subq))
+            return xapian.Query(xapian.Query.OP_SCALE_WEIGHT,
+                                self.compile(query.subq), query.mult)
         elif isinstance(query, multisearch.queries.QueryAll):
             return xapian.Query("")
         elif isinstance(query, multisearch.queries.QueryNone):
@@ -520,8 +425,7 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
         elif isinstance(query, XapianQuery):
             return query.xapq
         elif isinstance(query, multisearch.queries.QuerySimilar):
-            FIXME # implement
-            return xapian
+            raise multisearch.errors.FeatureNotAvailableError("Similarity queries not yet implemented for Xapian backend")
         else:
             raise multisearch.errors.UnknownQueryTypeError(
                 "Query %s of unknown type" % query)
@@ -538,12 +442,34 @@ class BaseSearchClient(multisearch.client.BaseSearchClient):
         enq.set_query(xq)
 
         order_by = params.get('order_by')
-        if order_by is not None:
-            enq.set_sort_by_value() # FIXME
+        if order_by:
+            if not isinstance(order_by, basestring):
+                # FIXME - support multiple sort orders.
+                raise multisearch.errors.FeatureNotAvailableError("Xapian backend currently only supports ordering by a single field.")
+            ascending = True
+            if order_by[0] == '+':
+                order_by = order_by[1:]
+            elif order_by[0] == '-':
+                ascending = False
+                order_by = order_by[1:]
+            if order_by:
+                type, params = self.schema.get(order_by)
+                try:
+                    slot = params['slot']
+                except KeyError:
+                    raise multisearch.errors.FeatureNotAvailableError("Cannot sort by this field type - no associated slot")
+                enq.set_sort_by_value(slot)
 
-        mset = enq.get_mset(params['start_rank'],
-                            params['end_rank'] - params['start_rank'])
-        return Results(self, mset)
+        check_at_least = params.get('check_at_least', 0)
+        if check_at_least == -1:
+            check_at_least = self.db.get_doccount()
+        extra_args = list(params.get('search_args', []))
+
+        start_rank = params['start_rank']
+        end_rank = params['end_rank']
+        mset = enq.get_mset(start_rank, end_rank - start_rank,
+                            check_at_least, *extra_args)
+        return Results(self, mset, start_rank)
 
 class ReadonlySearchClient(BaseSearchClient):
     """A readonly Xapian SearchClient.
