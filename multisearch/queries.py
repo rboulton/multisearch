@@ -51,12 +51,14 @@ class Query(object):
     NONE = 6
     TERMS = 7
     SIMILAR = 8
+    AND_MAYBE = 9
 
     # The names of the operators, in order.
     OP_NAMES = (u'OR', u'AND', u'XOR', u'NOT',
                 u'MULTWEIGHT',
                 u'ALL', u'NONE',
                 u'TERMS', u'SIMILAR',
+                u'AND_MAYBE',
                )
 
     # Symbols representing the operators, in order.  None if no symbol.
@@ -190,6 +192,12 @@ class Query(object):
         """
         return QueryAnd((self, other * 0))
 
+    def and_maybe(self, other):
+        """Return a query with weights added from another query.
+
+        """
+        return QueryAndMaybe((self, other))
+
     def connect(self, conn):
         """Connect this query to a connection.
 
@@ -253,6 +261,15 @@ class QueryAnd(QueryCombination):
 
     """
     op = Query.AND
+
+class QueryAndMaybe(QueryCombination):
+    """A query which matches a document if its left subquery matches.
+
+    The weights for the returned query will be the sum of the weights of the
+    subqueries.
+
+    """
+    op = Query.AND_MAYBE
 
 class QueryXor(QueryCombination):
     """A query which matches a document if an odd number of its subqueries match.

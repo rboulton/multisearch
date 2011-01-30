@@ -29,6 +29,7 @@ import tempfile
 import unittest
 
 # Add each new backend here.
+#all_backends = ('xapian', 'pyes', )
 all_backends = ('xapian', )
 
 def with_backends(*args):
@@ -77,5 +78,10 @@ class MultiSearchTestCase(unittest.TestCase):
 
         """
         dbname = "db%d" % dbnum
-        client = multisearch.SearchClient(backend, path=os.path.join(self.tmpdir, dbname), readonly=readonly)
+        kwargs = dict(readonly=readonly)
+        if backend in ['xapian']:
+            kwargs['path'] = os.path.join(self.tmpdir, dbname)
+        elif backend in ['pyes']:
+            kwargs['server'] = '127.0.0.1:9500'
+        client = multisearch.SearchClient(backend, **kwargs)
         return client

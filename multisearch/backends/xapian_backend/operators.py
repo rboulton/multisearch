@@ -30,4 +30,5 @@ _opmap = {
     multisearch.queries.Query.AND: xapian.Query.OP_AND,
     multisearch.queries.Query.XOR: xapian.Query.OP_XOR,
     multisearch.queries.Query.NOT: xapian.Query.OP_AND_NOT,
+    multisearch.queries.Query.AND_MAYBE: xapian.Query.OP_AND_MAYBE,
 }
