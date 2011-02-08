@@ -214,7 +214,7 @@ class Query(object):
         return self
 
     def order_by(self, criteria):
-        return Search(self).order_by
+        return Search(self).order_by(criteria)
 
     def search(self, *args, **kwargs):
         """Make a search using this query.
