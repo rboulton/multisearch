@@ -64,6 +64,8 @@ class XapianBlobIndexer(object):
         if isinstance(values, basestring):
             values = (values, )
         for value in values:
+            if len(value) == 0:
+                continue
             if self.slot is not None:
                 self.xdoc.add_value(self.slot, value)
             if s is not None:
