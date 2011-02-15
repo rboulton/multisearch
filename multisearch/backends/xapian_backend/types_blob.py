@@ -79,6 +79,8 @@ class XapianBlobQueryGenerator(object):
         self.prefix = str(params.get('prefix', ''))
 
     def __call__(self, client, value):
+        if not value:
+            return XapianQuery(xapian.Query())
         if value[0].isupper():
             value = ':' + value
         return XapianQuery(xapian.Query(self.prefix + value))
