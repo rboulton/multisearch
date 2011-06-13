@@ -3,10 +3,17 @@ MultiSearch
 
 Warning: experimental code.
 
-This is an attempt to build a generic search engine interface in Python, which
+This was an attempt to build a generic search engine interface in Python, which
 exposes a common subset of features for each engine, but also allows each
 engine to be accessed directly to allow the full range of features for that
 engine to be used.
+
+For now, I'm declaring the attempt a failure - I don't think it's completely
+impossible to implement this, but it's a very hard problem because of the
+massive variation in the interfaces provided by each engine.  Cross engine
+integration is probably better done at a higher level, for a particular access
+pattern, rather than at a low level attempting all allow all types of search
+engine usage.
 
 Example
 -------
